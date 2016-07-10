@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([bin/take], [0.0.1], [tero.isannainen@gmail.com])
+AC_INIT([bin/take], [0.0.2], [tero.isannainen@gmail.com])
 AM_INIT_AUTOMAKE
 
 AC_CONFIG_SRCDIR([src/take.c])

@@ -19,7 +19,7 @@
 #include "config.h"
 
 #ifdef HAVE_VFORK
-#define _BSD_SOURCE
+# define _DEFAULT_SOURCE
 #endif
 
 
@@ -36,11 +36,11 @@
 #include "prompt.h"
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+# include <sys/types.h>
 #endif
 
 #include <sys/wait.h>
@@ -538,7 +538,7 @@ void list_from_command( select_lines_t* sl, char* cmd )
   if ( !fh )
     take_fatal( "Could not execute: %s", cmd );
 
-  for (;;)
+  loop
     {
       text = NULL;
       linelen = 0;
@@ -645,7 +645,7 @@ void list_from_stdin( select_lines_t* sl )
   size_t linelen;
   select_line_t* line;
 
-  for (;;)
+  loop
     {
       text = NULL;
       linelen = 0;
@@ -684,7 +684,7 @@ void process_cmd_escapes( char* cmd, char* arg, mcc_p buf )
 
   ci = 0;
 
-  for (;;)
+  loop
     {
       if ( cmd[ ci ] == 0 )
         /* End of command. */
@@ -799,7 +799,7 @@ void select_lines_view( select_lines_t* sl, select_lines_t* view_sl )
   bool_t done = false;
 
   /* Get user input. */
-  for (;;)
+  loop
     {
       key = screen_get_key();
 
@@ -923,7 +923,7 @@ void show_file_content( select_lines_t* sl, char* filename )
   char* text;
   size_t linelen;
 
-  for (;;)
+  loop
     {
       text = NULL;
       linelen = 0;
@@ -1219,7 +1219,7 @@ void select_lines_find_interactive( select_lines_t* sl,
 
 
   /* Get user input. */
-  for (;;)
+  loop
     {
       key = screen_get_key();
 
@@ -1376,7 +1376,7 @@ bool_t interaction( select_lines_t* sl )
   select_lines_display( sl );
 
   /* Get user input. */
-  for (;;)
+  loop
     {
       key = screen_get_key();
 
@@ -1789,7 +1789,7 @@ void select_lines_presel_file( select_lines_t* sl, char* filename )
 
   ch = fgetc( fh );
 
-  for (;;)
+  loop
     {
 
       switch ( fsm )
@@ -1868,7 +1868,7 @@ int main( int argc, char** argv )
    char header[ 128 ];
 
    /* Define command line options. */
-   como_command( "take", "Tero Isannainen", "2015",
+   como_maincmd( "take", "Tero Isannainen", "2015",
      { COMO_OPT_SINGLE, "input", "-i", "Input list generation command." },
      { COMO_OPT_ANY, "list", "-l", "Directory listing as input (default: <curdir>)." },
      { COMO_OPT_SINGLE, "command", "-c", "Output processing command. Display selection if not given." },
