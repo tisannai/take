@@ -9,6 +9,7 @@
 #include "mc.h"
 #include "global.h"
 #include "mcc.h"
+#include "mcs.h"
 #include "como.h"
 #include "screen.h"
 #include "prompt.h"
