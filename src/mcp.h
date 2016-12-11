@@ -7,6 +7,8 @@
  *
  * @brief Automatic allocation for array of mcp.
  *
+ * @mainpage
+ *
  * mcp-library is for automatic allocation for array of mcp. It
  * does not include any extra functionality so it can easily be linked
  * also statically to programs.

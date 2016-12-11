@@ -27,7 +27,8 @@ Use '--prefix' option for 'configure' if you don't want the default
 installation location.
 
 Take prefers 'termbox' library, but at minimum 'ncurses' is
-required. Otherwise Take is "self-contained", i.e. does not depend on
+required. Also a Command line parser library called Como is
+used. Otherwise Take is "self-contained", i.e. does not depend on
 external libs.
 
 Options for 'configure', see: configure --help:

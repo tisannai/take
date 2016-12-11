@@ -7,12 +7,14 @@
  *
  * @brief Automatic allocation for array of char* type.
  *
+ * @mainpage
+ *
  * mcc-library provides automatic allocation for array of char* type
  * items. It is compact and does not include any extra functionality,
  * so it is also suitable for static linking.
  *
  * mcc depends on types from mc-lib:
- * - Boolean:  bool_t
+ * - Boolean:  mc_bool_t
  * - Size:     mc_size_t
  *
  * mcc depends on memory allocation functions from mc-lib:
@@ -60,7 +62,7 @@ typedef struct mcc_s mcc_t;
 typedef mcc_t* mcc_p;
 
 /** Autoarr resizer function type. */
-typedef bool_t (*mcc_resize_func_t) ( mcc_p aa, mc_size_t newsize );
+typedef mc_bool_t (*mcc_resize_func_t) ( mcc_p aa, mc_size_t newsize );
 
 /** Handle to default Autoarr resizer function. */
 extern mcc_resize_func_t mcc_resize_func;
@@ -110,7 +112,7 @@ struct mcc_s
  * 
  * @return True if resizing was performed.
  */
-bool_t mcc_default_resizer( mcc_p aa, mc_size_t newsize );
+mc_bool_t mcc_default_resizer( mcc_p aa, mc_size_t newsize );
 
 
 /**
@@ -122,7 +124,7 @@ bool_t mcc_default_resizer( mcc_p aa, mc_size_t newsize );
  * 
  * @return True if resizing was performed.
  */
-bool_t mcc_enlarge_resizer( mcc_p aa, mc_size_t newsize );
+mc_bool_t mcc_enlarge_resizer( mcc_p aa, mc_size_t newsize );
 
 
 /**
@@ -323,7 +325,7 @@ void mcc_append_n( mcc_p aa, char* data, mc_size_t len );
  * @param data Source data address (pointer to data).
  * @return True if data added.
  */
-bool_t mcc_append_unique( mcc_p aa, char data );
+mc_bool_t mcc_append_unique( mcc_p aa, char data );
 
 
 
@@ -363,7 +365,7 @@ mc_size_t mcc_find_idx( mcc_p aa, char data );
  * @param aa Autoarr descriptor.
  * @param data Compare data.
  */
-bool_t mcc_find( mcc_p aa, char data );
+mc_bool_t mcc_find( mcc_p aa, char data );
 
 
 /**
@@ -414,151 +416,7 @@ char mcc_peek( mcc_p s );
  * 
  * @return True if no entries.
  */
-bool_t mcc_empty( mcc_p aa );
+mc_bool_t mcc_empty( mcc_p aa );
 
-
-
-/**
- * Extensions for easy string creation within mcc.
- */
-
-
-/**
- * Sprintf to end of Autoarr or create a new Autoarr if aa is NULL
- * using mcc_enlarge_resizer. Make space accordingly. The string is
- * null terminated.
- * 
- * @param aa Autoarr.
- * @param format Format string.
- * @param ... Formatting arguments.
- * @return Created aa (or original).
- */
-mcc_p mcc_printf( mcc_p aa, const char* format, ... );
-
-
-/**
- * Sprintf to beginning of Autoarr or create a new Autoarr if aa is NULL
- * using mcc_enlarge_resizer. Make space accordingly. The string is
- * null terminated.
- * 
- * @param aa Autoarr.
- * @param format Format string.
- * @param ... Formatting arguments.
- * @return Created aa (or original).
- */
-mcc_p mcc_reprintf( mcc_p aa, const char* format, ... );
-
-
-/**
- * Sprintf to end of Autoarr or create a new Autoarr if aa is NULL
- * using mcc_enlarge_resizer. Make space accordingly. The string is
- * null terminated.
- * 
- * @param aa Autoarr.
- * @param format Format string.
- * @param ap Variable arguments.
- * @return Created aa (or original).
- */
-mcc_p mcc_vprintf( mcc_p aa, const char* format, va_list ap );
-
-
-
-
-/**
- * Free Autoarr except for the data part. User can build the dataset
- * and after calling this function user can use the data in read-only
- * mode.
- * 
- * @param aa Autoarr descriptor.
- * @return Data part of Autoarr.
- */
-char* mcc_strip( mcc_p aa );
-
-
-/**
- * Convert null-terminated c-string to Autoarr.
- * 
- * @param str Source string.
- * 
- * @return Autoarr.
- */
-mcc_p mcc_from_str( const char* str );
-
-
-/**
- * Return Autoarr data as c-string. User have to make sure that data
- * is null terminated (e.g. result from mcc_printf).
- * 
- * @param aa Autoarr.
- * @return C-string.
- */
-const char* mcc_as_str( mcc_p aa );
-
-
-/**
- * Null terminate Autoarr data (c-string). User must ensure that there
- * are no inside nulls. Autoarr used is not changed, but space for the
- * extra null is added if necessary.
- * 
- * @param aa Autoarr.
- * 
- * @return C-string.
- */
-const char* mcc_to_str( mcc_p aa );
-
-
-/**
- * Null terminate Autoarr data (c-string) and replace included nulls
- * with nuller. Duplicate Autoarr if original is needed.
- * 
- * @param aa Autoarr.
- * @param nuller Null replacement char.
- * 
- * @return C-string.
- */
-const char* mcc_to_cstr( mcc_p aa, char nuller );
-
-
-/**
- * Remove last item from data if NEWLINE.
- * 
- * @param aa Autoarr.
- */
-void mcc_chomp( mcc_p aa );
-
-
-/**
- * Remove last item from data if matches trim.
- * conversion.
- * 
- * @param aa Autoarr.
- * @param trim Trim value.
- */
-void mcc_trim_with( mcc_p aa, char trim );
-
-
-/**
- * Return the size of the formatted string.
- *
- *
- * @param format Printf formatter.
- * @param ... Fields in format.
- *
- * @return Size of formatted string.
- */
-mc_size_t mcc_format_size( const char* format, ... );
-
-
-/**
- * Concatenate given strings and allocate space for them. The last
- * argument has to be NULL to terminate the list. Allocated memory has
- * to be freed after use.
- *
- *
- * @param first First string in concatenation.
- *
- * @return Concatenated strings.
- */
-char* mcc_str_concat( const char *first, ... );
 
 #endif

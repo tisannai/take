@@ -36,7 +36,7 @@ mc_bool_t mcp_default_resizer( mcp_p aa, mc_size_t newsize )
       while ( newsize > aa->size )
         aa->size = aa->size*2;
       mcp_resize_to( aa, aa->size );
-      return true;
+      return mc_true;
     }
   else if ( newsize < aa->size/2 )
     {
@@ -46,10 +46,10 @@ mc_bool_t mcp_default_resizer( mcp_p aa, mc_size_t newsize )
               ( aa->size / 2 ) > newsize )
         aa->size /= 2;
       mcp_resize_to( aa, aa->size );
-      return true;
+      return mc_true;
     }
   else
-    return false;
+    return mc_false;
 }
 
 
@@ -60,10 +60,10 @@ mc_bool_t mcp_enlarge_resizer( mcp_p aa, mc_size_t newsize )
       while ( newsize > aa->size )
         aa->size = aa->size*2;
       mcp_resize_to( aa, aa->size );
-      return true;
+      return mc_true;
     }
   else
-    return false;
+    return mc_false;
 }
 
 
@@ -275,11 +275,11 @@ mc_bool_t mcp_append_unique( mcp_p aa, void* data )
   if ( !mcp_find( aa, data ) )
     {
       mcp_append( aa, data );
-      return true;
+      return mc_true;
     }
   else
     {
-      return false;
+      return mc_false;
     }
 }
 
@@ -315,9 +315,9 @@ mc_bool_t mcp_find( mcp_p aa, void* data )
   idx = mcp_find_idx( aa, data );
 
   if ( idx != MCP_INVALID_INDEX )
-    return true;
+    return mc_true;
   else
-    return false;
+    return mc_false;
 }
 
 
@@ -356,7 +356,7 @@ void* mcp_peek( mcp_p s )
 mc_bool_t mcp_empty( mcp_p aa )
 {
   if ( aa->used == 0 )
-    return true;
+    return mc_true;
   else
-    return false;
+    return mc_false;
 }

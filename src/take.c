@@ -30,6 +30,7 @@
 #include <como.h>
 
 #include "mcc.h"
+#include "mcs.h"
 #include "mcp.h"
 #include "global.h"
 #include "screen.h"
@@ -222,7 +223,7 @@ select_line_t* select_line_new( char* text )
 
   ret = mc_new( select_line_t );
   ret->text = text;
-  ret->marked = false;
+  ret->marked = mc_false;
 
   return ret;
 }
@@ -263,7 +264,7 @@ select_lines_t* select_lines_rem( select_lines_t* sl )
 {
   select_line_t* line;
 
-  for_n( sl->lines->used )
+  mc_for_n( sl->lines->used )
     {
       line = sl->lines->data[i];
       mc_free( line->text );
@@ -371,9 +372,9 @@ void select_lines_toggle_mark( select_lines_t* sl )
   select_line_t* line;
   line = mcc_nth( sl->lines, sl->curline );
   if ( line->marked )
-    line->marked = false;
+    line->marked = mc_false;
   else
-    line->marked = true;
+    line->marked = mc_true;
 }
 
 
@@ -398,7 +399,7 @@ void select_lines_set_mark_to( select_lines_t* sl, bool_t marked )
  */
 void select_lines_set_mark( select_lines_t* sl )
 {
-  select_lines_set_mark_to( sl, true );
+  select_lines_set_mark_to( sl, mc_true );
 }
 
 
@@ -409,7 +410,7 @@ void select_lines_set_mark( select_lines_t* sl )
  */
 void select_lines_reset_mark( select_lines_t* sl )
 {
-  select_lines_set_mark_to( sl, false );
+  select_lines_set_mark_to( sl, mc_false );
 }
 
 
@@ -460,9 +461,9 @@ int select_lines_move_down_n( select_lines_t* sl, int n )
 bool_t select_lines_move_down( select_lines_t* sl )
 {
   if ( select_lines_move_down_n( sl, 1 ) == 1 )
-    return true;
+    return mc_true;
   else
-    return false;
+    return mc_false;
 }
 
 
@@ -513,9 +514,9 @@ int select_lines_move_up_n( select_lines_t* sl, int n )
 bool_t select_lines_move_up( select_lines_t* sl )
 {
   if ( select_lines_move_up_n( sl, 1 ) == 1 )
-    return true;
+    return mc_true;
   else
-    return false;
+    return mc_false;
 }
 
 
@@ -538,7 +539,7 @@ void list_from_command( select_lines_t* sl, char* cmd )
   if ( !fh )
     take_fatal( "Could not execute: %s", cmd );
 
-  loop
+  mc_loop
     {
       text = NULL;
       linelen = 0;
@@ -645,7 +646,7 @@ void list_from_stdin( select_lines_t* sl )
   size_t linelen;
   select_line_t* line;
 
-  loop
+  mc_loop
     {
       text = NULL;
       linelen = 0;
@@ -684,7 +685,7 @@ void process_cmd_escapes( char* cmd, char* arg, mcc_p buf )
 
   ci = 0;
 
-  loop
+  mc_loop
     {
       if ( cmd[ ci ] == 0 )
         /* End of command. */
@@ -796,10 +797,10 @@ void select_lines_view( select_lines_t* sl, select_lines_t* view_sl )
 
 
   int key;
-  bool_t done = false;
+  bool_t done = mc_false;
 
   /* Get user input. */
-  loop
+  mc_loop
     {
       key = screen_get_key();
 
@@ -809,7 +810,7 @@ void select_lines_view( select_lines_t* sl, select_lines_t* view_sl )
         case ESC:
         case CTRL_G:
         case NEWLINE:
-          done = true;
+          done = mc_true;
           break;
 
         case 'n':
@@ -923,7 +924,7 @@ void show_file_content( select_lines_t* sl, char* filename )
   char* text;
   size_t linelen;
 
-  loop
+  mc_loop
     {
       text = NULL;
       linelen = 0;
@@ -989,7 +990,7 @@ select_lines_t* select_lines_create_commands( select_lines_t* sl )
         join_str = " ";
 
       select_line_t* line;
-      bool_t nonfirst = false;
+      bool_t nonfirst = mc_false;
 
       mcc_reset( strbuf );
       for ( line_index_t i = 0; i < sl->lines->used; i++ )
@@ -1000,7 +1001,7 @@ select_lines_t* select_lines_create_commands( select_lines_t* sl )
               if ( nonfirst )
                 mcc_append_n( strbuf, join_str, strlen( join_str ) );
               else
-                nonfirst = true;
+                nonfirst = mc_true;
 
               mcc_append_n( strbuf, line->text, strlen( line->text ) );
             }
@@ -1119,7 +1120,7 @@ void select_lines_mark_matching( select_lines_t* sl,
     {
       line = mcp_nth( sl->lines, i );
       if ( regexec( re, line->text, 0, NULL, 0 ) == 0 )
-        line->marked = true;
+        line->marked = mc_true;
     }
 
   regex_rem( re );
@@ -1196,11 +1197,11 @@ void select_lines_find_interactive( select_lines_t* sl,
   select_lines_t org_sl;
   select_lines_t prev_sl;
   int key;
-  bool_t done = false;
-  bool_t use_org = false;
+  bool_t done = mc_false;
+  bool_t use_org = mc_false;
   regex_t* re;
   line_index_t offset;
-  bool_t first_search = true;
+  bool_t first_search = mc_true;
 
   /* Save search start position. */
   org_sl = *sl;
@@ -1219,7 +1220,7 @@ void select_lines_find_interactive( select_lines_t* sl,
 
 
   /* Get user input. */
-  loop
+  mc_loop
     {
       key = screen_get_key();
 
@@ -1228,15 +1229,15 @@ void select_lines_find_interactive( select_lines_t* sl,
 
         case ESC:
         case CTRL_G:
-          done = true;
+          done = mc_true;
           /* Revert back to original line. */
-          use_org = true;
+          use_org = mc_true;
           break;
 
         case NEWLINE:
-          done = true;
+          done = mc_true;
           /* Stay on line that had last match. */
-          use_org = false;
+          use_org = mc_false;
           break;
 
         case 's':
@@ -1259,7 +1260,7 @@ void select_lines_find_interactive( select_lines_t* sl,
           /* For first search also the current line is searched. */
           if ( first_search || select_lines_move_down( sl ) )
             {
-              if ( ( offset = select_lines_find_next( sl, re, true ) ) != -1 )
+              if ( ( offset = select_lines_find_next( sl, re, mc_true ) ) != -1 )
                 /* Found new matching line. */
                 select_lines_move_down_n( sl, offset );
               else
@@ -1267,7 +1268,7 @@ void select_lines_find_interactive( select_lines_t* sl,
                 select_lines_save_position( &prev_sl, sl );
             }
 
-          first_search = false;
+          first_search = mc_false;
 
           break;
 
@@ -1279,13 +1280,13 @@ void select_lines_find_interactive( select_lines_t* sl,
 
           if ( first_search || select_lines_move_up( sl ) )
             {
-              if ( ( offset = select_lines_find_next( sl, re, false ) ) != -1 )
+              if ( ( offset = select_lines_find_next( sl, re, mc_false ) ) != -1 )
                 select_lines_move_up_n( sl, offset );
               else
                 select_lines_save_position( &prev_sl, sl );
             }
 
-          first_search = false;
+          first_search = mc_false;
 
           break;
 
@@ -1366,8 +1367,8 @@ void select_lines_view_commands( select_lines_t* sl )
 bool_t interaction( select_lines_t* sl )
 {
   int key;
-  bool_t execute = false;
-  bool_t done = false;
+  bool_t execute = mc_false;
+  bool_t done = mc_false;
   select_line_t* line;
 
   win_info* wi = sl->list_wi;
@@ -1376,7 +1377,7 @@ bool_t interaction( select_lines_t* sl )
   select_lines_display( sl );
 
   /* Get user input. */
-  loop
+  mc_loop
     {
       key = screen_get_key();
 
@@ -1387,13 +1388,13 @@ bool_t interaction( select_lines_t* sl )
         {
 
         case 'q':
-          done = true;
-          execute = false;
+          done = mc_true;
+          execute = mc_false;
           break;
 
         case 'x':
-          done = true;
-          execute = true;
+          done = mc_true;
+          execute = mc_true;
           break;
 
         case 'J':
@@ -1487,7 +1488,7 @@ bool_t interaction( select_lines_t* sl )
           for ( line_index_t i = 0; i < sl->lines->used; i++ )
             {
               line = mcp_nth( sl->lines, i );
-              line->marked = true;
+              line->marked = mc_true;
             }
           break;
 
@@ -1495,7 +1496,7 @@ bool_t interaction( select_lines_t* sl )
           for ( line_index_t i = 0; i < sl->lines->used; i++ )
             {
               line = mcp_nth( sl->lines, i );
-              line->marked = false;
+              line->marked = mc_false;
             }
           break;
 
@@ -1663,7 +1664,7 @@ bool_t setup_and_interact( select_lines_t* sl )
   screen_post_win_resize = win_resize_callback;
   screen_fatal_error = take_fatal;
 
-  sl->list_wi = screen_open_window_geom( si, 0, 1, 0, 1, false );
+  sl->list_wi = screen_open_window_geom( si, 0, 1, 0, 1, mc_false );
 
 
   /* Status display offset from window right towards left. */
@@ -1675,7 +1676,7 @@ bool_t setup_and_interact( select_lines_t* sl )
                                        line_status_field_pos+1,
                                        -1,
                                        0,
-                                       false
+                                       mc_false
                                        );
   sl->prompt = prompt_init( prompt_wi, NULL );
   
@@ -1684,7 +1685,7 @@ bool_t setup_and_interact( select_lines_t* sl )
                                             find_status_field_pos+1,
                                             -1,
                                             0,
-                                            false
+                                            mc_false
                                             );
   sl->line_status = prompt_init( line_status_wi, NULL );
   
@@ -1693,7 +1694,7 @@ bool_t setup_and_interact( select_lines_t* sl )
                                             1,
                                             -1,
                                             0,
-                                            false
+                                            mc_false
                                             );
   sl->find_status = prompt_init( find_status_wi, NULL );
 
@@ -1731,7 +1732,7 @@ void select_lines_presel_all( select_lines_t* sl )
   for ( line_index_t i = 0; i < sl->lines->used; i++ )
     {
       line = mcp_nth( sl->lines, i );
-      line->marked = true;
+      line->marked = mc_true;
     }
 }
 
@@ -1789,7 +1790,7 @@ void select_lines_presel_file( select_lines_t* sl, char* filename )
 
   ch = fgetc( fh );
 
-  loop
+  mc_loop
     {
 
       switch ( fsm )
@@ -1947,12 +1948,12 @@ int main( int argc, char** argv )
     }
 
 
-  bool_t execute = false;
+  bool_t execute = mc_false;
 
 #ifdef TAKE_SKIP_INTERACTION
 
   /* Skipping interaction helps terminal based debugging. */
-  execute = true;
+  execute = mc_true;
 
 # else
 
@@ -1962,7 +1963,7 @@ int main( int argc, char** argv )
       execute = setup_and_interact( sl );
     }
   else
-    execute = true;
+    execute = mc_true;
 
 #endif
 
