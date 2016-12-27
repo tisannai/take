@@ -621,12 +621,15 @@ void list_from_dir( select_lines_t* sl, char* dirname )
              mcp_sizeof,
              list_sort_cmp );
 
-      /* Add sorted entries to lines list. */
+      /* Add sorted entries to lines list with dirname. */
+      mcc_p filename = mcc_new_size( 128 );
       for ( int i = 0; i < unsorted->used; i++ )
         {
-          line = select_line_new( mcp_nth( unsorted, i ) );
+          mcc_reprintf( filename, "%s/%s", dirname, mcp_nth( unsorted, i )  );
+          line = select_line_new( mc_strdup( (char*) mcc_as_str( filename ) ) );
           mcp_append( sl->lines, line );
         }
+      mcc_del( filename );
 
       mcp_del( unsorted );
     }
