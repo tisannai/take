@@ -600,7 +600,7 @@ void list_from_dir( select_lines_t* sl, char* dirname )
     {
       mcp_p unsorted = mcp_new_size( 128 );
       select_line_t* line;
-      char* tmp;
+      char* tmpname;
 
       while ( ( entry = readdir( dir ) ) != NULL )
         {
@@ -608,8 +608,8 @@ void list_from_dir( select_lines_t* sl, char* dirname )
           if ( strcmp( ".", entry->d_name ) &&
                strcmp( "..", entry->d_name ) )
             {
-              tmp = mc_strdup( entry->d_name );
-              mcp_append( unsorted, tmp );
+              tmpname = mc_strdup( entry->d_name );
+              mcp_append( unsorted, tmpname );
             }
         }
 
@@ -625,7 +625,9 @@ void list_from_dir( select_lines_t* sl, char* dirname )
       mcc_p filename = mcc_new_size( 128 );
       for ( int i = 0; i < unsorted->used; i++ )
         {
-          mcc_reprintf( filename, "%s/%s", dirname, mcp_nth( unsorted, i )  );
+          tmpname = mcp_nth( unsorted, i );
+          mcc_reprintf( filename, "%s/%s", dirname, tmpname );
+          mc_del( tmpname );
           line = select_line_new( mc_strdup( (char*) mcc_as_str( filename ) ) );
           mcp_append( sl->lines, line );
         }
