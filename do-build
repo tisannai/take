@@ -1,0 +1,8 @@
+#!/bin/sh
+
+gcc -Wall -O2 -c src/common.c -o build/common.o
+gcc -Wall -O2 -c src/screen.c -o build/screen.o
+gcc -Wall -O2 -c src/prompt.c -o build/prompt.o
+gcc -Wall -O2 -c src/take.c -o build/take.o
+gcc build/common.o build/screen.o build/take.o build/prompt.o -ltermbox2 -lcomo -lplinth -o bin/take
+# a2x -v --doctype manpage --format manpage man/take.1.txt

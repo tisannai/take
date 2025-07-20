@@ -1,18 +1,21 @@
-#ifndef GLOBAL_H
-#define GLOBAL_H
+#ifndef COMMON_H
+#define COMMON_H
 
 
 /**
- * @file global.h
+ * @file common.h
  *
- * Program global defs.
+ * Program common defs.
  */
 
-/** Basic boolean type. */
-typedef mc_bool_t bool_t;
+#include <plinth.h>
 
-/** Short version of unsigned char. */
-typedef unsigned char uchar;
+
+/* Base allocator. */
+#define balloc_node_size ( 1 << 20 )
+#define balloc_cont_size ( ( balloc_node_size / 4 ) * 2 )
+extern plam_s balloc;
+
 
 
 /**
@@ -73,21 +76,21 @@ typedef unsigned char uchar;
  * to enable debugging.
  */
 #if 0
-#  define ml_do_debug 1
-#  define dbug(args...) (ml_dbug_print(args))
+#    define ml_do_debug 1
+#    define dbug( args... ) ( ml_dbug_print( args ) )
 #else
-#  define dbug(args...) {}
+#    define dbug( args... ) \
+        {                   \
+        }
 #endif
 
 
 /**
  * Function protos:
  */
-/* auto_c:c_func_decl:begin */
 void ml_dbug_open( const char* file );
-void ml_dbug_print( const char *format, ... );
+void ml_dbug_print( const char* format, ... );
 void ml_dbug_close( void );
-/* auto_c:c_func_decl:end */
 
 
 #endif

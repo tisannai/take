@@ -15,27 +15,22 @@ selection.
 ![take screencast](take.gif)
 
 
-# Installation
+# Building and installing
 
-**take** is compiled and installed using the typical autotools flow:
+**take** depends on libraries: `termbox2`, `como`, and `plinth`.
 
-    ./configure
-    make
-    make install
+**take** is compiled with simple shell script:
 
-Use '--prefix' option for 'configure' if you don't want the default
-installation location.
+    do-build
 
-Take prefers 'termbox' library, but at minimum 'ncurses' is
-required. Also a Command line parser library called Como is
-used. Otherwise Take is "self-contained", i.e. does not depend on
-external libs.
+The compiled binary is placed to `bin/take`.
 
-Options for 'configure', see: configure --help:
+Installation script is called `do-install`. Please, edit the script
+for setting the installation root directory.
 
-    mark-color  Color highlighting for marked lines (in red).
+The binary and man page can be installed with:
 
-See the file 'INSTALL' for details.
+    do-install
 
 
 # Documentation
@@ -48,5 +43,4 @@ See the file 'INSTALL' for details.
 See: COPYING
 
 
-
-Copyright (c) 2015 Tero Isannainen.
+Copyright (c) 2015, 2025 Tero Isannainen.

@@ -6,46 +6,48 @@
  */
 
 
-#include "mc.h"
-#include "global.h"
+#include <plinth.h>
+#include <string.h>
+#include <assert.h>
+
+#include "common.h"
 #include "screen.h"
 #include "config.h"
 
-#ifdef USE_TERMBOX
-# include <termbox.h>
-#else
-# include <ncurses.h>
-#endif
+#include <termbox2.h>
+
 
 
 /** Macro to index screen buffer array. */
-#define BUFI(x,y) ((y*(si->x_size))+x)
+#define BUFI( x, y ) ( ( y * ( si->x_size ) ) + x )
 
 /** Macro to index screen buffer array through window. */
-#define BUFWI(wi,x,y) (((y + wi->si->y_min + wi->y_min)*(wi->si->x_size)) + ( x + wi->si->x_min + wi->x_min ))
+#define BUFWI( wi, x, y )                                          \
+    ( ( ( y + wi->si->y_min + wi->y_min ) * ( wi->si->x_size ) ) + \
+      ( x + wi->si->x_min + wi->x_min ) )
 
 /** Convert exotic characters to space. */
-#define SIMPLE_CHAR(c) (screen_char_map[(uchar)c].type == text ? c : ' ')
+#define SIMPLE_CHAR( c ) ( screen_char_map[ (uint8_t)c ].type == text ? c : ' ' )
 
 
 
 /** Allow assertions for critical routines. */
 #ifdef ml_do_debug
-# define ASSERT 1
+#    define ASSERT 1
 #endif
 
 
 /** Global variable for screen. */
-screen_info* si;
+screen_info_t si;
 
 
 /** List of all active win_info. */
-ll* winlist = NULL;
+plcm_s winlist;
 
 
-void* screen_win_resize_context = NULL;
-screen_callback screen_pre_win_resize = NULL;
-screen_callback screen_post_win_resize = NULL;
+void*                 screen_win_resize_context = NULL;
+screen_callback       screen_pre_win_resize = NULL;
+screen_callback       screen_post_win_resize = NULL;
 screen_fatal_callback screen_fatal_error = NULL;
 
 int screen_status_line = -1;
@@ -54,10 +56,12 @@ int screen_status_line = -1;
 /**
  * Global handle to currently used character map.
  */
-screen_char_def_t* screen_char_map;
+screen_char_def_t screen_char_map;
 
 
-screen_char_def_t screen_default_char_map[] = {
+/* clang-format off */
+
+screen_char_def_s screen_default_char_map[] = {
   {code,"x00"},
   {code,"x01"},
   {code,"x02"},
@@ -316,200 +320,113 @@ screen_char_def_t screen_default_char_map[] = {
   {code,"xFF"},
 };
 
+/* clang-format on */
 
 
 
 static int scr_default_color = SCR_COLOR_DEFAULT;
 
 
-#ifdef USE_TERMBOX
-
 /* Termbox is able to utilize many colors. */
 
 /** Fore and background colors. */
-typedef struct fg_bg_color_s {
-  uint16_t fg;                  /**< Foreground. */
-  uint16_t bg;                  /**< Background. */
-} fg_bg_color;
+pl_struct( fg_bg_color )
+{
+    uint16_t fg; /**< Foreground. */
+    uint16_t bg; /**< Background. */
+};
 
 
 /** Color mapping table. */
-fg_bg_color scr_color_table[] = {
-  { 15, 0  }, /* SCR_COLOR_DEFAULT */
-  { 28, 0  }, /* SCR_COLOR_GREEN */
-  { 11, 0  }, /* SCR_COLOR_YELLOW */
-  { 9,  0  }, /* SCR_COLOR_RED */
-  { 23, 0  }, /* SCR_COLOR_BLUE */
-  { 68, 0  }, /* SCR_COLOR_BROWN */
-  { 0, 0 },
+fg_bg_color_s scr_color_table[] = {
+    { 15, 0 }, /* SCR_COLOR_DEFAULT */
+    { 28, 0 }, /* SCR_COLOR_GREEN */
+    { 11, 0 }, /* SCR_COLOR_YELLOW */
+    { 9, 0 },  /* SCR_COLOR_RED */
+    { 23, 0 }, /* SCR_COLOR_BLUE */
+    { 68, 0 }, /* SCR_COLOR_BROWN */
+    { 0, 0 },
 };
 
-#endif
 
-
-
-/** Set of functions that interface to either ncurses or termbox. */
-
-#ifdef USE_TERMBOX
 
 /** Initialize terminal. */
 void term_init( void )
 {
-  tb_init();
+    tb_init();
 }
+
 
 /** Return terminal width (-2). */
 int term_width( void )
 {
-  return tb_width()-2;
+    return tb_width() - 2;
 }
+
 
 /** Return terminal height (-2). */
 int term_height( void )
 {
-  return tb_height()-1;
+    return tb_height() - 1;
 }
 
+
 /** Return true is terminal has color. */
-bool_t term_has_color( void )
+pl_bool_t term_has_color( void )
 {
-  return true;
+    return pl_true;
 }
+
 
 /** Setup terminal color mode. */
 void term_setup_color( void )
 {
-  tb_select_output_mode( TB_OUTPUT_256 );
+    tb_set_output_mode( TB_OUTPUT_256 );
 }
+
 
 /** Close terminal. */
 void term_close( void )
 {
-  tb_shutdown();
+    tb_shutdown();
 }
+
 
 /** Set default color for terminal. */
 void screen_set_default_color( int color )
 {
-  scr_default_color = color;
+    scr_default_color = color;
 }
-
-
-# else
-
-
-/** Initialize terminal. */
-void term_init( void )
-{
-  /* Start curses mode. */
-  initscr();
-
-  /* Line buffering disabled. */
-
-#ifdef ml_do_debug
-
-  cbreak();
-
-#else
-
-  /* raw is normal setup. */
-  raw();
-
-#endif
-
-  /* Don't echo() while we do getch. */
-  noecho();
-}
-
-/**
- * Color setup.
- * 
- */
-void term_setup_color( void )
-{
-  start_color();
-  init_pair( SCR_COLOR_DEFAULT, COLOR_WHITE, COLOR_BLACK );
-  init_pair( SCR_COLOR_GREEN, COLOR_BLACK, COLOR_WHITE );
-}
-
-/**
- * Return terminal width.
- * 
- * @return Width.
- */
-int term_width( void )
-{
-  return COLS-2;
-}
-
-/**
- * Terminal height.
- * 
- * 
- * @return Height.
- */
-int term_height( void )
-{
-  return LINES-1;
-}
-
-/**
- * Has color check.
- * 
- * 
- * @return True if has color.
- */
-bool_t term_has_color( void )
-{
-  return ( has_colors() == TRUE );
-}
-
-/**
- * Close terminal.
- * 
- */
-void term_close( void )
-{
-  endwin();
-}
-
-/** Default color setting. */
-void screen_set_default_color( int color ) {}
-
-
-#endif
-
 
 
 /**
  * Open screen and return the screen information.
  *
  *
- * @return Screen information includind dimentions and such. 
+ * @return Screen information including dimentions and such.
 */
-/* autoc:c_func_decl:screen_open */
-screen_info* screen_open( void )
+screen_info_t screen_open( void )
 {
-  screen_info* si;
+    screen_info_t si;
 
+    term_init();
 
-  term_init();
+    plcm_new( &winlist, 16 );
 
-  si = mc_new( screen_info );
-  si->buf = NULL;
+    si = pl_alloc_memory_for_type( screen_info_s );
+    plcm_empty( &si->bufmem, 0 );
+    si->buf = NULL;
 
-  screen_update_geom( si );
+    screen_update_geom( si );
 
-  if ( si->color )
-    {
-      term_setup_color();
+    if ( si->color ) {
+        term_setup_color();
     }
 
-  screen_char_map = screen_default_char_map;
+    screen_char_map = screen_default_char_map;
 
-  return si;
+    return si;
 }
-
 
 
 /**
@@ -518,40 +435,33 @@ screen_info* screen_open( void )
  *
  * @param si Handle to screen.
  */
-/* autoc:c_func_decl:screen_update_geom */
-void screen_update_geom( screen_info* si )
+void screen_update_geom( screen_info_t si )
 {
+    /*
+     * Physical measures:
+     */
 
-  /*
-   * Physical measures:
-   */
+    si->x_min = 0;
+    si->y_min = 0;
+    /* Avoid bottom-right corner with curses (not COLS-1). */
+    si->x_max = term_width();
+    si->y_max = term_height();
 
-  if ( si->buf )
-    mc_free( si->buf );
+    si->y_size = si->y_max - si->y_min + 1;
+    si->x_size = si->x_max - si->x_min + 1;
+    si->size = si->y_size * si->x_size;
 
-  si->x_min = 0;
-  si->y_min = 0;
-  /* Avoid bottom-right corner with curses (not COLS-1). */
-  si->x_max = term_width();
-  si->y_max = term_height();
+    plcm_resize( &si->bufmem, si->size * sizeof( char_info_s ) );
+    si->buf = plcm_data( &si->bufmem );
 
-  si->y_size = si->y_max - si->y_min + 1;
-  si->x_size = si->x_max - si->x_min + 1;
-  si->size = si->y_size * si->x_size;
-
-  si->buf = mc_new_n(char_info,(si->size));
-
-  /* Ask ncurses if colors are available. */
-  if ( term_has_color() )
-    {
-      si->color = true;
+    if ( term_has_color() ) {
+        si->color = pl_true;
+    } else {
+        si->color = pl_false;
     }
-  else
-    si->color = false;
 
-  screen_clear_buf( si );
+    screen_clear_buf( si );
 }
-
 
 
 /**
@@ -561,16 +471,14 @@ void screen_update_geom( screen_info* si )
  * @param si Handle to screen.
  * @return NULL;
  */
-/* autoc:c_func_decl:screen_close */
-void* screen_close( screen_info* si )
+void* screen_close( screen_info_t si )
 {
-  mc_free( si->buf );
-  mc_free( si );
-  term_close();
-  return NULL;
+    plcm_del( &winlist );
+    plcm_del( &si->bufmem );
+    pl_free_memory( si );
+    term_close();
+    return NULL;
 }
-
-
 
 
 /**
@@ -591,31 +499,30 @@ void* screen_close( screen_info* si )
  *
  * @return Initialized window info.
  */
-/* autoc:c_func_decl:screen_open_window_geom */
-win_info* screen_open_window_geom( screen_info* si,
-                                   int x_min_offset,
-                                   int x_max_offset,
-                                   int y_min_offset,
-                                   int y_max_offset,
-                                   bool_t wrapline )
+win_info_t screen_open_window_geom( screen_info_t si,
+                                    int           x_min_offset,
+                                    int           x_max_offset,
+                                    int           y_min_offset,
+                                    int           y_max_offset,
+                                    pl_bool_t     wrapline )
 {
-  win_info* wi;
+    win_info_t wi;
 
-  wi = mc_new(win_info);
-  wi->si = si;
+    wi = pl_alloc_memory_for_type( win_info_s );
+    wi->si = si;
 
-  wi->x_min_offset = x_min_offset;
-  wi->x_max_offset = x_max_offset;
-  wi->y_min_offset = y_min_offset;
-  wi->y_max_offset = y_max_offset;
+    wi->x_min_offset = x_min_offset;
+    wi->x_max_offset = x_max_offset;
+    wi->y_min_offset = y_min_offset;
+    wi->y_max_offset = y_max_offset;
 
-  wi->wrapline = wrapline;
+    wi->wrapline = wrapline;
 
-  screen_init_win( wi );
+    screen_init_win( wi );
 
-  winlist = ll_add_data( winlist, wi );
+    plcm_store_for_type( &winlist, &wi, win_info_t );
 
-  return wi;
+    return wi;
 }
 
 
@@ -625,33 +532,35 @@ win_info* screen_open_window_geom( screen_info* si,
  *
  * @param wi Window info.
  */
-/* autoc:c_func_decl:screen_update_window_geom */
-void screen_update_window_geom( win_info* wi )
+void screen_update_window_geom( win_info_t wi )
 {
 
-  if ( wi->x_min_offset >= 0 )
-    wi->x_min = wi->x_min_offset;
-  else
-    wi->x_min = wi->si->x_size + wi->x_min_offset;
+    if ( wi->x_min_offset >= 0 ) {
+        wi->x_min = wi->x_min_offset;
+    } else {
+        wi->x_min = wi->si->x_size + wi->x_min_offset;
+    }
 
-  if ( wi->x_max_offset >= 0 )
-    wi->x_max = wi->si->x_size - wi->x_max_offset - 1;
-  else
-    wi->x_max = ( -1 * wi->x_max_offset ) - 1;
+    if ( wi->x_max_offset >= 0 ) {
+        wi->x_max = wi->si->x_size - wi->x_max_offset - 1;
+    } else {
+        wi->x_max = ( -1 * wi->x_max_offset ) - 1;
+    }
 
-  if ( wi->y_min_offset >= 0 )
-    wi->y_min = wi->y_min_offset;
-  else
-    wi->y_min = wi->si->y_size + wi->y_min_offset;
+    if ( wi->y_min_offset >= 0 ) {
+        wi->y_min = wi->y_min_offset;
+    } else {
+        wi->y_min = wi->si->y_size + wi->y_min_offset;
+    }
 
-  if ( wi->y_max_offset >= 0 )
-    wi->y_max = wi->si->y_size - wi->y_max_offset - 1;
-  else
-    wi->y_max = ( -1 * wi->y_max_offset ) - 1;
+    if ( wi->y_max_offset >= 0 ) {
+        wi->y_max = wi->si->y_size - wi->y_max_offset - 1;
+    } else {
+        wi->y_max = ( -1 * wi->y_max_offset ) - 1;
+    }
 
-  assert( wi->x_min <= wi->x_max );
-  assert( wi->y_min <= wi->y_max );
-
+    assert( wi->x_min <= wi->x_max );
+    assert( wi->y_min <= wi->y_max );
 }
 
 
@@ -661,19 +570,18 @@ void screen_update_window_geom( win_info* wi )
  *
  * @param wi Window info.
  */
-/* autoc:c_func_decl:screen_init_win */
-void screen_init_win( win_info* wi )
+void screen_init_win( win_info_t wi )
 {
 
-  screen_update_window_geom( wi );
+    screen_update_window_geom( wi );
 
-  wi->x = 0;
-  wi->y = 0;
+    wi->x = 0;
+    wi->y = 0;
 
-  wi->refresh = true;
-  wi->content = NULL;
+    wi->refresh = pl_true;
+    wi->content = NULL;
 
-  screen_clear_win( wi );
+    screen_clear_win( wi );
 }
 
 
@@ -683,27 +591,9 @@ void screen_init_win( win_info* wi )
  *
  * @param wi Window info.
  */
-/* autoc:c_func_decl:screen_close_window */
-void screen_close_window( win_info* wi )
+void screen_close_window( win_info_t wi )
 {
-  ll* win_node;
-
-  win_node = ll_find_data( ll_begin( winlist ), wi );
-  if ( win_node )
-    ll_delete_and_update( win_node, &winlist );
-
-  mc_free( wi );
-}
-
-
-/**
- * Return list of active windows.
- *
- * @return Window list.
- */
-ll* screen_winlist( void ) /*acfd*/
-{
-  return winlist;
+    pl_free_memory( wi );
 }
 
 
@@ -713,14 +603,12 @@ ll* screen_winlist( void ) /*acfd*/
  *
  * @param si Screen info.
  */
-/* autoc:c_func_decl:screen_clear_buf */
-void screen_clear_buf( screen_info* si )
+void screen_clear_buf( screen_info_t si )
 {
-  int i;
-  for ( i = 0; i < si->size; i++ )
-    {
-      si->buf[ i ].ch = 0;
-      si->buf[ i ].color = SCR_COLOR_DEFAULT;
+    int i;
+    for ( i = 0; i < si->size; i++ ) {
+        si->buf[ i ].ch = 0;
+        si->buf[ i ].color = SCR_COLOR_DEFAULT;
     }
 }
 
@@ -731,21 +619,18 @@ void screen_clear_buf( screen_info* si )
  *
  * @param wi Window info.
  */
-/* autoc:c_func_decl:screen_clear_win */
-void screen_clear_win( win_info* wi )
+void screen_clear_win( win_info_t wi )
 {
-  int x, y;
-  int x_limit;
+    int x, y;
+    int x_limit;
 
-  /* Always clear one extra. */
-  x_limit = WI_X_SIZE(wi)+1;
+    /* Always clear one extra. */
+    x_limit = WI_X_SIZE( wi ) + 1;
 
-  for ( y = 0; y < WI_Y_SIZE(wi); y++ )
-    {
-      for ( x = 0; x < x_limit; x++ )
-        {
-          wi->si->buf[ BUFWI(wi,x,y) ].ch = 0;
-          wi->si->buf[ BUFWI(wi,x,y) ].color = SCR_COLOR_DEFAULT;
+    for ( y = 0; y < WI_Y_SIZE( wi ); y++ ) {
+        for ( x = 0; x < x_limit; x++ ) {
+            wi->si->buf[ BUFWI( wi, x, y ) ].ch = 0;
+            wi->si->buf[ BUFWI( wi, x, y ) ].color = SCR_COLOR_DEFAULT;
         }
     }
 }
@@ -757,19 +642,17 @@ void screen_clear_win( win_info* wi )
  *
  * @param wi Window info.
  */
-/* autoc:c_func_decl:screen_clear_line */
-void screen_clear_line( win_info* wi )
+void screen_clear_line( win_info_t wi )
 {
-  int x;
-  int x_limit;
+    int x;
+    int x_limit;
 
-  /* Always clear one extra. */
-  x_limit = WI_X_SIZE(wi)+1;
+    /* Always clear one extra. */
+    x_limit = WI_X_SIZE( wi ) + 1;
 
-  for ( x = 0; x < x_limit; x++ )
-    {
-      wi->si->buf[ BUFWI(wi,x,wi->y) ].ch = 0;
-      wi->si->buf[ BUFWI(wi,x,wi->y) ].color = SCR_COLOR_DEFAULT;
+    for ( x = 0; x < x_limit; x++ ) {
+        wi->si->buf[ BUFWI( wi, x, wi->y ) ].ch = 0;
+        wi->si->buf[ BUFWI( wi, x, wi->y ) ].color = SCR_COLOR_DEFAULT;
     }
 }
 
@@ -780,16 +663,14 @@ void screen_clear_line( win_info* wi )
  *
  * @param wi Window info to check.
  */
-/* autoc:c_func_decl:screen_inside_win */
-bool_t screen_inside_win( win_info* wi )
+pl_bool_t screen_inside_win( win_info_t wi )
 {
-  if ( wi->x <= WI_X_MAX(wi)
-       && wi->y <= WI_Y_MAX(wi)
-       && wi->x >= WI_X_MIN(wi)
-       && wi->y >= WI_Y_MIN(wi) )
-    return true;
-  else
-    return false;
+    if ( wi->x <= WI_X_MAX( wi ) && wi->y <= WI_Y_MAX( wi ) && wi->x >= WI_X_MIN( wi ) &&
+         wi->y >= WI_Y_MIN( wi ) ) {
+        return pl_true;
+    } else {
+        return pl_false;
+    }
 }
 
 
@@ -801,21 +682,22 @@ bool_t screen_inside_win( win_info* wi )
  *
  * @return True if at window bottom.
  */
-/* autoc:c_func_decl:screen_at_win_y_end */
-bool_t screen_at_win_y_end( win_info* wi )
+pl_bool_t screen_at_win_y_end( win_info_t wi )
 {
-  if ( wi->y == WI_Y_MAX(wi) )
-    return true;
+    if ( wi->y == WI_Y_MAX( wi ) ) {
+        return pl_true;
+    }
 #ifdef ASSERT
-  else if ( wi->y > WI_Y_MAX(wi) )
-    {
-      if ( screen_fatal_error )
-        screen_fatal_error( "screen_at_win_y_end" );
-      return false;
+    else if ( wi->y > WI_Y_MAX( wi ) ) {
+        if ( screen_fatal_error ) {
+            screen_fatal_error( "screen_at_win_y_end" );
+        }
+        return pl_false;
     }
 #endif
-  else
-    return false;
+    else {
+        return pl_false;
+    }
 }
 
 
@@ -827,21 +709,22 @@ bool_t screen_at_win_y_end( win_info* wi )
  *
  * @return True if at window bottom.
  */
-/* autoc:c_func_decl:screen_at_win_y_start */
-bool_t screen_at_win_y_start( win_info* wi )
+pl_bool_t screen_at_win_y_start( win_info_t wi )
 {
-  if ( wi->y == WI_Y_MIN(wi) )
-    return true;
+    if ( wi->y == WI_Y_MIN( wi ) ) {
+        return pl_true;
+    }
 #ifdef ASSERT
-  else if ( wi->y < WI_Y_MIN(wi) )
-    {
-      if ( screen_fatal_error )
-        screen_fatal_error( "screen_at_win_y_start" );
-      return false;
+    else if ( wi->y < WI_Y_MIN( wi ) ) {
+        if ( screen_fatal_error ) {
+            screen_fatal_error( "screen_at_win_y_start" );
+        }
+        return pl_false;
     }
 #endif
-  else
-    return false;
+    else {
+        return pl_false;
+    }
 }
 
 
@@ -855,16 +738,13 @@ bool_t screen_at_win_y_start( win_info* wi )
  *
  * @return True if inside.
  */
-/* autoc:c_func_decl:screen_inside */
-bool_t screen_inside( screen_info* si, int x, int y )
+pl_bool_t screen_inside( screen_info_t si, int x, int y )
 {
-  if ( x <= si->x_max
-       && y <= si->y_max
-       && x >= si->x_min
-       && y >= si->y_min )
-    return true;
-  else
-    return false;
+    if ( x <= si->x_max && y <= si->y_max && x >= si->x_min && y >= si->y_min ) {
+        return pl_true;
+    } else {
+        return pl_false;
+    }
 }
 
 
@@ -878,25 +758,21 @@ bool_t screen_inside( screen_info* si, int x, int y )
  *
  * @return True if inside.
  */
-/* autoc:c_func_decl:screen_setpos */
-bool_t screen_setpos( win_info* wi, int x, int y )
+pl_bool_t screen_setpos( win_info_t wi, int x, int y )
 {
-  win_info twi;
+    win_info_s twi;
 
-  twi = *wi;
-  twi.x = x;
-  twi.y = y;
+    twi = *wi;
+    twi.x = x;
+    twi.y = y;
 
-  if ( screen_inside_win( &twi ) )
-    {
-      wi->x = x;
-      wi->y = y;
-      return true;
-    }
-  else
-    {
-      dbug( "screen_setpos: outside x %d, y %d\n", twi.x, twi.y );
-      return false;
+    if ( screen_inside_win( &twi ) ) {
+        wi->x = x;
+        wi->y = y;
+        return pl_true;
+    } else {
+        dbug( "screen_setpos: outside x %d, y %d\n", twi.x, twi.y );
+        return pl_false;
     }
 }
 
@@ -912,27 +788,23 @@ bool_t screen_setpos( win_info* wi, int x, int y )
  *
  * @return Number of added chars.
  */
-/* autoc:c_func_decl:screen_set_str2 */
-int screen_set_str2( win_info* wi, const char* str )
+int screen_set_str2( win_info_t wi, const char* str )
 {
-  int len = strlen( str );
+    int len = strlen( str );
 
-  /* Write all chars to off-screen buffer unless they are
-     overflowing. */
-  for ( int i = 0; i < len; i++ )
-    {
-      if ( (wi->x+i) <= wi->x_max+1 )
-        {
-          wi->si->buf[ BUFWI(wi,wi->x+i,wi->y) ].ch = SIMPLE_CHAR( str[ i ] );
-          wi->si->buf[ BUFWI(wi,wi->x+i,wi->y) ].color = scr_default_color;
+    /* Write all chars to off-screen buffer unless they are
+       overflowing. */
+    for ( int i = 0; i < len; i++ ) {
+        if ( ( wi->x + i ) <= wi->x_max + 1 ) {
+            wi->si->buf[ BUFWI( wi, wi->x + i, wi->y ) ].ch = SIMPLE_CHAR( str[ i ] );
+            wi->si->buf[ BUFWI( wi, wi->x + i, wi->y ) ].color = scr_default_color;
         }
     }
 
-  return len;
+    return len;
 }
 
 
-#ifdef USE_TERMBOX
 /**
  * Write string to window (screen) with color to current position and
  * return strlen. Overflowing characters will not be displayed. Window
@@ -945,25 +817,21 @@ int screen_set_str2( win_info* wi, const char* str )
  *
  * @return Number of added chars.
  */
-/* autoc:c_func_decl:screen_set_str2 */
-int screen_set_color_str( win_info* wi, char* str, int color )
+int screen_set_color_str( win_info_t wi, const char* str, int color )
 {
-  int len = strlen( str );
+    int len = strlen( str );
 
-  /* Write all chars to off-screen buffer unless they are
-     overflowing. */
-  for ( int i = 0; i < len; i++ )
-    {
-      if ( (wi->x+i) <= wi->x_max+1 )
-        {
-          wi->si->buf[ BUFWI(wi,wi->x+i,wi->y) ].ch = SIMPLE_CHAR( str[ i ] );
-          wi->si->buf[ BUFWI(wi,wi->x+i,wi->y) ].color = color;
+    /* Write all chars to off-screen buffer unless they are
+       overflowing. */
+    for ( int i = 0; i < len; i++ ) {
+        if ( ( wi->x + i ) <= wi->x_max + 1 ) {
+            wi->si->buf[ BUFWI( wi, wi->x + i, wi->y ) ].ch = SIMPLE_CHAR( str[ i ] );
+            wi->si->buf[ BUFWI( wi, wi->x + i, wi->y ) ].color = color;
         }
     }
 
-  return len;
+    return len;
 }
-#endif
 
 
 /**
@@ -972,53 +840,29 @@ int screen_set_color_str( win_info* wi, char* str, int color )
  *
  * @param si Screen info.
  */
-/* autoc:c_func_decl:screen_dump */
-void screen_dump( screen_info* si )
+void screen_dump( screen_info_t si )
 {
+    uint16_t fg, bg;
+    uint32_t sch;
 
-#ifdef USE_TERMBOX
-
-  uint16_t fg, bg;
-
-  for ( int y = 0; y < si->y_size; y++ )
-    {
-      for ( int x = 0; x < si->x_size; x++ )
-        {
-          if ( si->color )
-            {
-              fg = scr_color_table[ si->buf[ BUFI(x,y) ].color ].fg;
-              bg = scr_color_table[ si->buf[ BUFI(x,y) ].color ].bg;
+    for ( int y = 0; y < si->y_size; y++ ) {
+        for ( int x = 0; x < si->x_size; x++ ) {
+            if ( si->color ) {
+                fg = scr_color_table[ si->buf[ BUFI( x, y ) ].color ].fg;
+                bg = scr_color_table[ si->buf[ BUFI( x, y ) ].color ].bg;
+            } else {
+                fg = scr_color_table[ SCR_COLOR_DEFAULT ].fg;
+                bg = scr_color_table[ SCR_COLOR_DEFAULT ].bg;
             }
-          else
-            {
-              fg = scr_color_table[ SCR_COLOR_DEFAULT ].fg;
-              bg = scr_color_table[ SCR_COLOR_DEFAULT ].bg;
+            if ( si->buf[ BUFI( x, y ) ].ch == 0 ) {
+                sch = ' ';
+            } else {
+                sch = si->buf[ BUFI( x, y ) ].ch;
             }
-          tb_change_cell( x, y, si->buf[ BUFI(x,y) ].ch, fg, bg );
+
+            tb_set_cell( x, y, sch, (uintattr_t)fg, (uintattr_t)bg );
         }
     }
-
-# else
-
-  int y;
-  char tmpstr[ 1024 ];
-
-  for ( y = 0; y < si->y_size; y++ )
-    {
-      if ( si->color && ( y == screen_status_line ) )
-        attron( COLOR_PAIR( SCR_COLOR_GREEN ) );
-
-      for ( int x = 0; x < si->x_size; x++ )
-        tmpstr[ x ] = si->buf[ BUFI(x,y) ].ch;
-
-      mvaddnstr( y, 0, tmpstr, si->x_size );
-
-      if ( si->color && ( y == screen_status_line ) )
-        attroff( COLOR_PAIR( SCR_COLOR_GREEN ) );
-    }
-
-#endif
-
 }
 
 
@@ -1028,31 +872,13 @@ void screen_dump( screen_info* si )
  *
  * @param wi Window info.
  */
-/* autoc:c_func_decl:screen_refresh */
-void screen_refresh( win_info* wi )
+void screen_refresh( win_info_t wi )
 {
-  if ( wi->refresh )
-    {
-
-#ifdef USE_TERMBOX
-
-      tb_clear();
-      screen_dump( wi->si );
-      tb_set_cursor( wi->si->x_min + wi->x_min + wi->x,
-                     wi->si->y_min + wi->y_min + wi->y );
-      tb_present();
-
-# else
-
-      erase();
-      screen_dump( wi->si );
-      dbug( "screen_refresh: x %d, y %d\n", wi->x, wi->y );
-      move( wi->si->y_min + wi->y_min + wi->y,
-            wi->si->x_min + wi->x_min + wi->x );
-      refresh();
-
-#endif
-
+    if ( wi->refresh ) {
+        tb_clear();
+        screen_dump( wi->si );
+        tb_set_cursor( wi->si->x_min + wi->x_min + wi->x, wi->si->y_min + wi->y_min + wi->y );
+        tb_present();
     }
 }
 
@@ -1063,117 +889,57 @@ void screen_refresh( win_info* wi )
  *
  * @return Key value.
  */
-/* autoc:c_func_decl:screen_get_key */
 int screen_get_key( void )
 {
+    int             key;
+    struct tb_event event;
+    for ( ;; ) {
+        tb_poll_event( &event );
 
-#ifdef USE_TERMBOX
-
-  int key;
-  struct tb_event event;
-  for (;;)
-    {
-      tb_poll_event( &event );
-
-      if ( event.type == TB_EVENT_RESIZE )
-        {
-          /* Termbox has detected window resizing. */
-          if ( screen_pre_win_resize )
-            screen_pre_win_resize( screen_win_resize_context );
-
-          tb_clear();
-          screen_update_geom( si );
-
-          /* Update all living window geometries. */
-          for ( ll* wl = ll_start( winlist ); wl; wl = ll_next( wl ) )
-            {
-              screen_update_window_geom( ( win_info* ) wl->data );
+        if ( event.type == TB_EVENT_RESIZE ) {
+            /* Termbox has detected window resizing. */
+            if ( screen_pre_win_resize ) {
+                screen_pre_win_resize( screen_win_resize_context );
             }
 
-          if ( screen_post_win_resize )
-            screen_post_win_resize( screen_win_resize_context );
+            tb_clear();
+            screen_update_geom( si );
 
-        }
-      else
-        {
-          break;
-        }
-    }
-
-  if ( event.key == 0 )
-    {
-      /* Normal character, i.e. ch has valid value. */
-      key = event.ch;
-    }
-  else
-    {
-      /* Control character, i.e. key has valid value. */
-      if ( event.key == TB_KEY_ENTER )
-        /* Map Enter to CTRL_J. */
-        key = NEWLINE;
-      else
-        key = event.key;
-    }
-
-  if ( key >= 32 && key <= 126 )
-    {
-      dbug( "key: %d (\"%c\")\n", key, (char) key );
-    }
-  else
-    {
-      dbug( "key: %d\n", key );
-    }
-
-  return key;
-
-#else
-
-  int key;
-
-  for (;;)
-    {
-      key = getch();
-
-      if ( key == KEY_RESIZE )
-        {
-
-          /* Curses has detected window resising. */
-          if ( screen_pre_win_resize )
-            screen_pre_win_resize( screen_win_resize_context );
-
-          clear();
-          refresh();
-          screen_update_geom( si );
-
-          /* Update all living window geometries. */
-          for ( ll* wl = ll_start( winlist ); wl; wl = ll_next( wl ) )
-            {
-              screen_update_window_geom( ( win_info* ) wl->data );
+            /* Update all living window geometries. */
+            for ( win_info_p wl = plcm_data( &winlist ); (pl_t)wl < plcm_end( &winlist ); wl++ ) {
+                screen_update_window_geom( *wl );
             }
 
-          if ( screen_post_win_resize )
-            screen_post_win_resize( screen_win_resize_context );
 
+            if ( screen_post_win_resize ) {
+                screen_post_win_resize( screen_win_resize_context );
+            }
+
+        } else {
+            break;
         }
-      else
-        {
-          break;
+    }
+
+    if ( event.key == 0 ) {
+        /* Normal character, i.e. ch has valid value. */
+        key = event.ch;
+    } else {
+        /* Control character, i.e. key has valid value. */
+        if ( event.key == TB_KEY_ENTER ) {
+            /* Map Enter to CTRL_J. */
+            key = NEWLINE;
+        } else {
+            key = event.key;
         }
     }
 
-  if ( key >= 32 && key <= 126 )
-    {
-      dbug( "key: %d (\"%c\")\n", key, (char) key );
-    }
-  else
-    {
-      dbug( "key: %d\n", key );
+    if ( key >= 32 && key <= 126 ) {
+        dbug( "key: %d (\"%c\")\n", key, (char)key );
+    } else {
+        dbug( "key: %d\n", key );
     }
 
-  return key;
-
-#endif
-
+    return key;
 }
 
 
@@ -1183,19 +949,14 @@ int screen_get_key( void )
  *
  * @param str Status line content.
  */
-/* autoc:c_func_decl:screen_set_status */
 void screen_set_status( char* str )
 {
-  for ( int i = 0; i < strlen(str); i++ )
-    {
-      si->buf[ BUFI(0+i,screen_status_line) ].ch = str[ i ];
-      si->buf[ BUFI(0+i,screen_status_line) ].color = SCR_COLOR_GREEN;
+    for ( int i = 0; i < strlen( str ); i++ ) {
+        si->buf[ BUFI( 0 + i, screen_status_line ) ].ch = str[ i ];
+        si->buf[ BUFI( 0 + i, screen_status_line ) ].color = SCR_COLOR_GREEN;
     }
 }
 
-
-
-#ifdef USE_TERMBOX
 
 /**
  * Update status line with str.
@@ -1204,67 +965,64 @@ void screen_set_status( char* str )
  * @param str Status line content.
  * @param len Status line length.
  */
-void screen_set_status_with_color( char_info* str, int len )
+void screen_set_status_with_color( char_info_t str, int len )
 {
-  for ( int i = 0; i < len; i++ )
-    {
-      si->buf[ BUFI(0+i,screen_status_line) ].ch = str[ i ].ch;
-      si->buf[ BUFI(0+i,screen_status_line) ].color = str[ i ].color;
+    for ( int i = 0; i < len; i++ ) {
+        si->buf[ BUFI( 0 + i, screen_status_line ) ].ch = str[ i ].ch;
+        si->buf[ BUFI( 0 + i, screen_status_line ) ].color = str[ i ].color;
     }
 }
-
-#endif
 
 
 /**
  * Return window x-size.
  */
-int screen_win_x_size( win_info* wi ) /*acfd*/
+int screen_win_x_size( win_info_t wi )
 {
-  return WI_X_SIZE(wi);
+    return WI_X_SIZE( wi );
 }
 
 
 /**
  * Return window y-size.
  */
-int screen_win_y_size( win_info* wi ) /*acfd*/
+int screen_win_y_size( win_info_t wi )
 {
-  return WI_Y_SIZE(wi);
+    return WI_Y_SIZE( wi );
 }
 
 
 /**
  * Return window x-min.
  */
-int screen_win_x_min( win_info* wi ) /*acfd*/
+int screen_win_x_min( win_info_t wi )
 {
-  return WI_X_MIN(wi);
+    return WI_X_MIN( wi );
 }
 
 
 /**
  * Return window y-min.
  */
-int screen_win_y_min( win_info* wi ) /*acfd*/
+int screen_win_y_min( win_info_t wi )
 {
-  return WI_Y_MIN(wi);
+    return WI_Y_MIN( wi );
 }
 
 
 /**
  * Return window x-max.
  */
-int screen_win_x_max( win_info* wi ) /*acfd*/
+int screen_win_x_max( win_info_t wi )
 {
-  return WI_X_MAX(wi);
+    return WI_X_MAX( wi );
 }
 
 
 /**
  * Return window y-max.
  */
-int screen_win_y_max( win_info* wi ) /*acfd*/
+int screen_win_y_max( win_info_t wi )
 {
-  return WI_Y_MAX(wi);
+    return WI_Y_MAX( wi );
 }

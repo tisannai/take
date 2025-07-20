@@ -6,84 +6,79 @@
  */
 
 
-#include "mc.h"
-#include "global.h"
-#include "mcc.h"
-#include "mcs.h"
+#include <plinth.h>
+#include <string.h>
+#include "common.h"
 #include "como.h"
 #include "screen.h"
 #include "prompt.h"
 
 
 /** Screen x position. */
-#define x_pos(p) ((p)->x0 + ((p)->bi - (p)->b0))
+#define x_pos( p ) ( ( p )->x0 + ( ( p )->bi - ( p )->b0 ) )
 
 
 /**
  * Initialize Prompt object content.
- * 
+ *
  * @param wi Window ref.
  * @param user_prompt User prompt label (or NULL);
- * 
+ *
  * @return Prompt object.
  */
-prompt_t* prompt_init( win_info* wi, char* user_prompt ) /*acfd*/
+prompt_t prompt_init( prompt_t p, win_info_t wi, const char* user_prompt )
 {
-  prompt_t* p;
+    p->wi = wi;
 
-  p = mc_new( prompt_t );
-  p->wi = wi;
-  
-  p->label = NULL;
-  prompt_label( p, user_prompt );
+    plcm_use( &p->label, p->labelmem, 128 );
+    prompt_label( p, user_prompt );
 
-  p->buf = NULL;
+    plcm_empty( &p->buf, 256 );
+    p->interaction = pl_false;
 
-  return p;
+    return p;
 }
 
 
 /**
  * Free Prompt object.
- * 
+ *
  * @param p Prompt object.
  */
-void prompt_close( prompt_t* p ) /*acfd*/
+void prompt_close( prompt_t p )
 {
-  screen_clear_win( p->wi );
-  screen_refresh( p->wi );
-  
-  if ( p->buf )
-    mcc_del( p->buf );
-  mc_free( p->label );
-  mc_free( p );
+    screen_clear_win( p->wi );
+    screen_refresh( p->wi );
+    plcm_del( &p->buf );
+    plcm_del( &p->label );
 }
 
 
 /**
  * Prepare user input buffer for input.
- * 
+ *
  * @param p Prompt object.
  */
-void prompt_open_buffer( prompt_t* p ) /*acfd*/
+void prompt_open_buffer( prompt_t p )
 {
-  p->buf = mcc_new_size( 16 );
-  p->b0 = 0;
-  p->bi = 0;
+    plcm_resize( &p->buf, 0 );
+    p->interaction = pl_true;
+    p->b0 = 0;
+    p->bi = 0;
 }
 
 
 /**
  * Free user input buffer.
- * 
+ *
  * @param p Prompt object.
  */
-void prompt_close_buffer( prompt_t* p ) /*acfd*/
+void prompt_close_buffer( prompt_t p )
 {
-  if ( p->buf )
-    p->buf = mcc_del( p->buf );
-  p->b0 = 0;
-  p->bi = 0;
+    plcm_reset( &p->buf );
+    p->interaction = pl_false;
+    p->b0 = 0;
+    p->bi = 0;
 }
 
 
@@ -91,233 +86,208 @@ void prompt_close_buffer( prompt_t* p ) /*acfd*/
 /**
  * Set label for prompt or set message. Previous label string is
  * freed.
- * 
+ *
  * @param p Prompt object.
  * @param prompt Content for prompt-label or message.
  */
-void prompt_label( prompt_t* p, char* prompt ) /*acfd*/
+void prompt_label( prompt_t p, const char* prompt )
 {
-  if ( p->label )
-    {
-      mc_free( p->label );
-      p->label = NULL;
-    }
-
-  if ( prompt )
-    {
-      p->x0 = strlen( prompt );
-      p->label = mc_strdup( prompt );
+    if ( prompt ) {
+        p->x0 = strlen( prompt );
+        plss_set( &p->label, plsr_from_string( prompt ) );
+    } else {
+        plcm_reset( &p->label );
     }
 }
 
 
 /**
  * Display user message.
- * 
+ *
  * @param p Prompt object.
  * @param msg Message to display.
  */
-void prompt_msg( prompt_t* p, char* msg ) /*acfd*/
+void prompt_msg( prompt_t p, const char* msg )
 {
-  prompt_label( p, msg );
-  prompt_refresh( p );
+    prompt_label( p, msg );
+    prompt_refresh( p );
 }
 
 
 /**
  * Refresh prompt content on screen, i.e. label and possible user
  * input.
- * 
+ *
  * @param p Prompt object.
  */
-void prompt_refresh( prompt_t* p ) /*acfd*/
+void prompt_refresh( prompt_t p )
 {
+    screen_clear_win( p->wi );
 
-  screen_clear_win( p->wi );
-  
-  if ( p->label )
-    {
-      screen_setpos( p->wi, 0, 0 );
-      screen_set_str2( p->wi, p->label );
+    if ( !plss_is_empty( &p->label ) ) {
+        screen_setpos( p->wi, 0, 0 );
+        screen_set_str2( p->wi, plss_string( &p->label ) );
     }
 
-  if ( prompt_interacting( p ) )
-    {
-      const char* view;
+    if ( prompt_interacting( p ) ) {
+        const char* view;
 
-      screen_setpos( p->wi, p->x0, 0 );
-      view = mcc_to_str( p->buf );
-      view += p->b0;
-      screen_set_str2( p->wi, view );
+        screen_setpos( p->wi, p->x0, 0 );
+        view = plss_string( &p->buf );
+        view += p->b0;
+        screen_set_str2( p->wi, view );
 
-      screen_setpos( p->wi, x_pos(p), 0 );
+        screen_setpos( p->wi, x_pos( p ), 0 );
     }
 
-  screen_refresh( p->wi );
+    screen_refresh( p->wi );
 }
 
 
 /**
  * Return true if user interaction is ongoing.
  */
-bool_t prompt_interacting( prompt_t* p ) /*acfd*/
+pl_bool_t prompt_interacting( prompt_t p )
 {
-  return ( p->buf != NULL );
+    return p->interaction;
 }
-  
+
 
 /**
  * Interact using the prompt, i.e. get user input.
- * 
+ *
  * @param p Prompt object.
  * @param label Prompt-label.
- * 
+ *
  * @return Input given by the user.
  */
-char* prompt_interact( prompt_t* p, char* label ) /*acfd*/
+const char* prompt_interact( prompt_t p, const char* label )
 {
-  bool_t done = false;
-  int key;
-  char* ret;
+    pl_bool_t   done = pl_false;
+    int         key;
+    const char* ret;
 
-  prompt_label( p, label );
-  prompt_open_buffer( p );
+    prompt_label( p, label );
+    prompt_open_buffer( p );
 
-  /* Initial screen refresh. */
-  prompt_refresh( p );
-  
-  /* Get user input. */
-  for (;;)
-    {
-      key = screen_get_key();
+    /* Initial screen refresh. */
+    prompt_refresh( p );
 
-      switch ( key )
-        {
+    /* Get user input. */
+    for ( ;; ) {
 
-        case NEWLINE:
-          done = true;
-          ret = mc_strdup( mcc_to_str( p->buf ) );
-          break;
+        key = screen_get_key();
 
-        case ESC:
-        case CTRL_G:
-          done = true;
-          ret = NULL;
-          break;
+        switch ( key ) {
 
-        case CTRL_B:
-          /* Backwards char. */
-          if ( p->bi > 0 )
-            {
-              if ( p->wi->x <= p->x0 )
-                {
-                  p->b0--;
-                  p->bi--;
+            case NEWLINE:
+                done = pl_true;
+                ret = plss_string( &p->buf );
+                break;
+
+            case ESC:
+            case CTRL_G:
+                done = pl_true;
+                ret = NULL;
+                break;
+
+            case CTRL_B:
+                /* Backwards char. */
+                if ( p->bi > 0 ) {
+                    if ( p->wi->x <= p->x0 ) {
+                        p->b0--;
+                        p->bi--;
+                    } else {
+                        p->bi--;
+                    }
                 }
-              else
-                {
-                  p->bi--;
-                }
-            }
-          break;
+                break;
 
-        case CTRL_F:
-          /* Forwards char. */
-          if ( p->bi < p->buf->used )
-            {
-              if ( p->wi->x >= WI_X_MAX(p->wi) )
-                {
-                  p->b0++;
-                  p->bi++;
+            case CTRL_F:
+                /* Forwards char. */
+                if ( p->bi < plss_length( &p->buf ) ) {
+                    if ( p->wi->x >= WI_X_MAX( p->wi ) ) {
+                        p->b0++;
+                        p->bi++;
+                    } else {
+                        p->bi++;
+                    }
                 }
-              else
-                {
-                  p->bi++;
+                break;
+
+            case CTRL_A:
+                /* Beginning of line. */
+                p->bi = 0;
+                p->b0 = 0;
+                break;
+
+            case CTRL_E:
+                /* End of line. */
+                p->bi = plss_length( &p->buf );
+                p->b0 = p->bi - WI_X_MAX( p->wi ) + p->x0;
+                if ( p->b0 < 0 ) {
+                    p->b0 = 0;
                 }
-            }
-          break;
+                break;
 
-        case CTRL_A:
-          /* Beginning of line. */
-          p->bi = 0;
-          p->b0 = 0;
-          break;
-
-        case CTRL_E:
-          /* End of line. */
-          p->bi = p->buf->used;
-          p->b0 = p->bi - WI_X_MAX(p->wi) + p->x0;
-          if ( p->b0 < 0 )
-            p->b0 = 0;
-          break;
-
-        case CTRL_D:
-          /* Delete char. */
-          if ( p->bi < p->buf->used )
-            {
-              mcc_delete_at( p->buf, p->bi );
-            }
-          break;
-
-        case BS:
-        case CTRL_H:
-          /* Backspace char. */
-          if ( p->bi > 0 )
-            {
-              if ( p->wi->x <= p->x0 )
-                {
-                  p->b0--;
-                  p->bi--;
+            case CTRL_D:
+                /* Delete char. */
+                if ( p->bi < plss_length( &p->buf ) ) {
+                    plss_remove( &p->buf, p->bi, 1 );
                 }
-              else
-                {
-                  p->bi--;
-                }
-              mcc_delete_at( p->buf, p->bi );
-            }
-          break;
+                break;
 
-        case CTRL_K:
-          /* Kill line. */
-          if ( p->bi < p->buf->used )
-            {
-              mcc_delete_n_at( p->buf, p->bi, p->buf->used - p->bi );
-            }
-          break;
+            case BS:
+            case CTRL_H:
+                /* Backspace char. */
+                if ( p->bi > 0 ) {
+                    if ( p->wi->x <= p->x0 ) {
+                        p->b0--;
+                        p->bi--;
+                    } else {
+                        p->bi--;
+                    }
+                    plss_remove( &p->buf, p->bi, 1 );
+                }
+                break;
 
-        default:
-          /* Add char. */
-          if ( key >= 32 && key <= 126 )
-            {
-              mcc_insert_to( p->buf, p->bi, (char) key );
-              if ( p->wi->x >= WI_X_MAX(p->wi) )
-                {
-                  p->b0++;
-                  p->bi++;
+            case CTRL_K:
+                /* Kill line. */
+                if ( p->bi < plss_length( &p->buf ) ) {
+                    plss_remove( &p->buf, p->bi, plss_length( &p->buf ) - p->bi );
                 }
-              else
-                {
-                  p->bi++;
+                break;
+
+            default:
+                /* Add char. */
+                if ( key >= 32 && key <= 126 ) {
+                    char c;
+                    c = key;
+                    plss_insert( &p->buf, p->bi, &c, 1 );
+                    if ( p->wi->x >= WI_X_MAX( p->wi ) ) {
+                        p->b0++;
+                        p->bi++;
+                    } else {
+                        p->bi++;
+                    }
                 }
-            }
-          break;
+                break;
         }
 
-      if ( done )
-        break;
+        if ( done ) {
+            break;
+        }
 
-      prompt_refresh( p );
-
+        prompt_refresh( p );
     }
 
-  dbug( "prompt ret: %s\n", ret );
+    dbug( "prompt ret: %s\n", ret );
 
-  /* Cleanup. */
-  prompt_close_buffer( p );
-  prompt_label( p, NULL );
+    /* Cleanup. */
+    prompt_close_buffer( p );
+    prompt_label( p, NULL );
 
-  prompt_refresh( p );
+    prompt_refresh( p );
 
-  return ret;
+    return ret;
 }
-

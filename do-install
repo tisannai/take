@@ -1,0 +1,13 @@
+#!/bin/sh
+
+# Root directory for installation.
+# install_root=$HOME/usr
+
+if test -z "$install_root"; then
+    echo "Please, set install_root in do-install before running do-install."
+    exit 1
+fi
+
+# Perform installation under installation directory.
+cp bin/take ${install_root}/bin
+cp man/take.1 ${install_root}/man/man1
