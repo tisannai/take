@@ -16,8 +16,6 @@
  *  - select files for tar package
  */
 
-#include "config.h"
-
 #ifdef HAVE_VFORK
 #    define _DEFAULT_SOURCE
 #endif
@@ -29,6 +27,9 @@
 #include <string.h>
 #include <errno.h>
 #include <ctype.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <dirent.h>
 #include <regex.h>
 #include <como.h>
@@ -37,15 +38,6 @@
 #include "screen.h"
 #include "prompt.h"
 
-#ifdef HAVE_UNISTD_H
-#    include <unistd.h>
-#endif
-
-#ifdef HAVE_SYS_TYPES_H
-#    include <sys/types.h>
-#endif
-
-#include <sys/wait.h>
 
 
 const char* take_version = "0.0.2";

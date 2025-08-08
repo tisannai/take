@@ -12,7 +12,6 @@
 
 #include "common.h"
 #include "screen.h"
-#include "config.h"
 
 #include <termbox2.h>
 
