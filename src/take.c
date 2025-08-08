@@ -578,7 +578,7 @@ void list_from_dir( select_lines_t sl, const char* dirname )
             /* Skip pwd and upper dir. */
             if ( strcmp( ".", entry->d_name ) && strcmp( "..", entry->d_name ) ) {
                 tmpdir = plam_store( &talloc, entry->d_name, strlen( entry->d_name ) + 1 );
-                plcm_store_ptr( &unsorted, &tmpdir );
+                plcm_store_ptr( &unsorted, tmpdir );
             }
         }
 
