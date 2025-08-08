@@ -8,6 +8,10 @@ if test -z "$install_root"; then
     exit 1
 fi
 
+
 # Perform installation under installation directory.
+mkdir -p ${install_root}/bin
 cp bin/take ${install_root}/bin
+
+mkdir -p ${install_root}/man/man1
 cp man/take.1 ${install_root}/man/man1

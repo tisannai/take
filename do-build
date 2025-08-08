@@ -1,5 +1,6 @@
 #!/bin/sh
 
+mkdir -p build
 gcc -Wall -O2 -c src/common.c -o build/common.o
 gcc -Wall -O2 -c src/screen.c -o build/screen.o
 gcc -Wall -O2 -c src/prompt.c -o build/prompt.o
