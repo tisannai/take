@@ -124,9 +124,9 @@ OUTPUT COMMAND FORMATTING
 The output-command syntax has a special tag ("@") for transferring the
 selection into the output-command(s). "@" is replaced with the
 selected item before output-command is executed. "@" may appear
-multiple times in the command. "@_" means literal "@" in the
-output, i.e. if the user needs the "@" character in the output and not
-an item from the list selection.
+multiple times in the command. "%@" means literal "@" in the output,
+i.e. if the user needs the "@" character in the output and not an item
+from the list selection. "%%" means the literal "%" in the output.
 
 By default the output-command is executed once per selected
 line. The '-j' switch can be used to join selection with <join>
@@ -171,7 +171,7 @@ Example3: Same as "Example1" but without shell piping.
 
 Example4: Echo input list selection with items surrounded by '@@' strings.
 ....
-  shell> take -a 'echo @_@_@@_@_'
+  shell> take -a 'echo %@%@@%@%@'
 ....
 
 Example5: Select a list of files/dirs to be removed hierarchically.

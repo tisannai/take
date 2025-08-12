@@ -632,19 +632,28 @@ void process_cmd_escapes( char* cmd, const char* arg, plcm_t buf )
     ci = 0;
 
     for ( ;; ) {
+
         if ( cmd[ ci ] == 0 ) {
             /* End of command. */
             break;
         }
 
         if ( cmd[ ci ] == '@' ) {
-            if ( cmd[ ci + 1 ] == '_' ) {
+            /* Replace with arg. */
+            plss_append_string( buf, arg );
+            ci++;
+        } else if ( cmd[ ci ] == '%' ) {
+            if ( cmd[ ci + 1 ] == '@' ) {
                 /* Literal @ to output. */
                 plss_append_char( buf, '@' );
                 ci += 2;
+            } else if ( cmd[ ci + 1 ] == '%' ) {
+                /* Literal % to output. */
+                plss_append_char( buf, '%' );
+                ci += 2;
             } else {
-                /* Replace with arg. */
-                plss_append_string( buf, arg );
+                /* Copy to output. */
+                plss_append_char( buf, cmd[ ci ] );
                 ci++;
             }
         } else {
