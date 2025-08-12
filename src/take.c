@@ -892,7 +892,6 @@ pl_none select_lines_create_commands( select_lines_t sl, select_lines_t cmds, pl
         command = opt->value[ 0 ];
     }
 
-
     if ( !command ) {
         /* No command to use, so use the default command. */
         command = "echo @";
@@ -1840,6 +1839,7 @@ int main( int argc, char** argv )
 
 
     if ( como_given( "selected" ) ) {
+
         FILE* fh;
 
         if ( como_given( "no_exec" ) ) {
@@ -1863,12 +1863,6 @@ int main( int argc, char** argv )
         take_exit( EXIT_SUCCESS );
     }
 
-
-    if ( !como_given( "command" ) && !como_given( "auto" ) ) {
-        if ( !no_exec_fh ) {
-            no_exec_fh = stdout;
-        }
-    }
 
     /* Execute selection using command(s). */
     select_lines_s cmds;

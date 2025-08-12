@@ -121,12 +121,12 @@ Press "h" for online command help display.
 OUTPUT COMMAND FORMATTING
 -------------------------
 
-The output-command syntax has a special tag ("@") for transferring
-the selection into the output-command(s). "@" is replaced with the
+The output-command syntax has a special tag ("@") for transferring the
+selection into the output-command(s). "@" is replaced with the
 selected item before output-command is executed. "@" may appear
-multiple times in the command. "@_" means literal "@" in the output,
-i.e. if the user needs the "@" character in the output and not an
-item from the list selection.
+multiple times in the command. "@_" means literal "@" in the
+output, i.e. if the user needs the "@" character in the output and not
+an item from the list selection.
 
 By default the output-command is executed once per selected
 line. The '-j' switch can be used to join selection with <join>
@@ -245,7 +245,7 @@ OPTIONS
 
 *-x, --no_exec*::
     Command given with *--command* is not executed if this option is
-    given. Instread the commands are stored to a file. Option
+    given. Instead the commands are stored to a file. Option
     parameter defines the name of the output file. If omitted, STDOUT
     is used.
 
