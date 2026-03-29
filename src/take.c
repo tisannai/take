@@ -941,7 +941,7 @@ pl_none select_lines_create_commands( select_lines_t sl, select_lines_t cmds, pl
 
 
         /* Take of &strbuf before its overwritten. */
-        plss_use( tmpstr, 1024 );
+        plcm_declare( tmpstr, 1024 );
         plss_append( &tmpstr, plss_ref( &strbuf ) );
 
         /* Create command. */
