@@ -40,7 +40,8 @@
 
 
 
-const char* take_version = "0.0.2";
+/* abu-version */
+const char* take_version = "0.1.0";
 
 #define ENABLE_MARK_COLOR
 
@@ -102,8 +103,7 @@ pl_struct( select_lines )
 static plcm_s strbuf;
 
 /** Buffer used for line reading from FILE handles. */
-static char*  textlinebuf;
-static size_t textlinelen;
+static plcm_s textlinebuf;
 
 
 /** Default breakpoint. */
@@ -117,18 +117,12 @@ void gdb_break( void )
 select_lines_t select_lines_rem( select_lines_t sl );
 
 
-ssize_t get_line_from_file( FILE* fh )
+/**
+ * Return a line from file stream, without the newline.
+ */
+plcm_t get_line_from_file( FILE* fh )
 {
-    ssize_t ret;
-
-    ret = getline( &textlinebuf, &textlinelen, fh );
-    if ( ret != -1 ) {
-        if ( ret > 0 && textlinebuf[ ret - 1 ] == '\n' ) {
-            textlinebuf[ ret - 1 ] = 0;
-            ret--;
-        }
-    }
-    return ret;
+    return plss_read_line( &textlinebuf, fh );
 }
 
 
@@ -139,7 +133,7 @@ ssize_t get_line_from_file( FILE* fh )
 void mem_cleanup( void )
 {
     plam_del( &balloc );
-    pl_free_memory( textlinebuf );
+    plcm_del( &textlinebuf );
     plcm_del( &strbuf );
 
 #ifdef ml_do_debug
@@ -210,24 +204,33 @@ void take_error( const char* format, ... )
 }
 
 
-static pl_none select_lines_add( select_lines_t sl, const char* text, pl_size_t textlen )
+/**
+ * Add line to select_lines.
+ */
+static pl_none select_lines_add( select_lines_t sl, plcm_t text )
 {
     select_line_t line;
     const char*   linetext;
 
-    linetext = plam_store( sl->alloc, (pl_t)text, textlen + 1 );
+    linetext = plam_store( sl->alloc, (pl_t)plss_string( text ), plss_length( text ) + 1 );
     line = plcm_get_ref_for_type( &sl->lines, select_line_s );
     line->text = linetext;
     line->marked = pl_false;
 }
 
 
+/**
+ * Reference a line from select_lines by position (index).
+ */
 static select_line_t select_lines_ref( select_lines_t sl, pl_pos_t pos )
 {
     return plcm_ref_for_type( &sl->lines, pos, select_line_s );
 }
 
 
+/**
+ * Return select_lines count.
+ */
 static pl_size_t select_lines_count( select_lines_t sl )
 {
     return plcm_used_for_type( &sl->lines, select_line_s );
@@ -506,8 +509,7 @@ pl_bool_t select_lines_move_up( select_lines_t sl )
  */
 void list_from_command( select_lines_t sl, const char* cmd )
 {
-    FILE*   fh;
-    ssize_t ret;
+    FILE* fh;
 
     fh = popen( cmd, "r" );
 
@@ -516,9 +518,8 @@ void list_from_command( select_lines_t sl, const char* cmd )
     }
 
     for ( ;; ) {
-        ret = get_line_from_file( fh );
-        if ( ret != -1 ) {
-            select_lines_add( sl, textlinebuf, ret );
+        if ( get_line_from_file( fh ) ) {
+            select_lines_add( sl, &textlinebuf );
         } else {
             break;
         }
@@ -583,7 +584,7 @@ void list_from_dir( select_lines_t sl, const char* dirname )
         for ( char** tmpname = plcm_data( &unsorted ); tmpname < (char**)plcm_end( &unsorted );
               tmpname++ ) {
             plss_reformat_string( &strbuf, "%s/%s", dirname, *tmpname );
-            select_lines_add( sl, plss_string( &strbuf ), plss_length( &strbuf ) );
+            select_lines_add( sl, &strbuf );
         }
 
         plcm_del( &unsorted );
@@ -600,13 +601,11 @@ void list_from_dir( select_lines_t sl, const char* dirname )
  */
 void list_from_stdin( select_lines_t sl )
 {
-    FILE*   fh = stdin;
-    ssize_t ret;
+    FILE* fh = stdin;
 
     for ( ;; ) {
-        ret = get_line_from_file( fh );
-        if ( ret != -1 ) {
-            select_lines_add( sl, textlinebuf, ret );
+        if ( get_line_from_file( fh ) ) {
+            select_lines_add( sl, &textlinebuf );
         } else {
             break;
         }
@@ -827,8 +826,9 @@ void show_command_help( select_lines_t sl )
 
     select_lines_new( &help_sl, &talloc, 128 );
 
+    plcm_s tmp;
     for ( int i = 0; help_list[ i ]; i++ ) {
-        select_lines_add( &help_sl, help_list[ i ], strlen( help_list[ i ] ) );
+        select_lines_add( &help_sl, plss_from_plsr( &tmp, plsr_from_string( help_list[ i ] ) ) );
     }
 
     select_lines_view( sl, &help_sl );
@@ -858,16 +858,10 @@ void show_file_content( select_lines_t sl, const char* filename )
     plam_use_plam( &talloc, &balloc, balloc_cont_size );
     select_lines_new( &file_sl, &talloc, 1024 );
 
-    ssize_t ret;
     for ( ;; ) {
-        ret = get_line_from_file( fh );
-        if ( ret != -1 ) {
+        if ( get_line_from_file( fh ) ) {
             /* Remove newline. */
-            if ( ret > 0 && textlinebuf[ ret - 1 ] == '\n' ) {
-                textlinebuf[ ret - 1 ] = 0;
-                ret--;
-            }
-            select_lines_add( &file_sl, textlinebuf, ret );
+            select_lines_add( &file_sl, &textlinebuf );
         } else {
             break;
         }
@@ -950,7 +944,7 @@ pl_none select_lines_create_commands( select_lines_t sl, select_lines_t cmds, pl
         /* Free the copy. */
         plcm_del( &tmpstr );
 
-        select_lines_add( cmds, plss_string( &strbuf ), plss_length( &strbuf ) );
+        select_lines_add( cmds, &strbuf );
 
     } else {
 
@@ -959,7 +953,7 @@ pl_none select_lines_create_commands( select_lines_t sl, select_lines_t cmds, pl
               line++ ) {
             if ( line->marked ) {
                 process_cmd_escapes( command, line->text, &strbuf );
-                select_lines_add( cmds, plss_string( &strbuf ), plss_length( &strbuf ) );
+                select_lines_add( cmds, &strbuf );
             }
         }
     }
@@ -1723,7 +1717,7 @@ int main( int argc, char** argv )
     char       header[ 128 ];
 
     /* Define command line options. */
-    como_maincmd(
+    como_command(
         "take",
         "Tero Isannainen",
         "2015, 2025",
@@ -1758,8 +1752,7 @@ int main( int argc, char** argv )
     /* Setup the base allocator for 1MB node. */
     plam_new( &balloc, 1 << 20 );
 
-    textlinelen = 8192;
-    textlinebuf = pl_alloc_memory( textlinelen );
+    plcm_new( &textlinebuf, 8192 );
 
     /* Lines container. */
     select_lines_s sl;
