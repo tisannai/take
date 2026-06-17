@@ -1716,28 +1716,46 @@ int main( int argc, char** argv )
     como_opt_t opt;
     char       header[ 128 ];
 
-    /* Define command line options. */
+    /* clang-format off */
     como_command(
         "take",
         "Tero Isannainen",
         "2015, 2025",
-        { COMO_OPT_SINGLE, "input", "-i", "Input list generation command." },
-        { COMO_OPT_ANY, "list", "-l", "Directory listing as input (default: <curdir>)." },
         { COMO_OPT_SINGLE,
-          "command",
-          "-c",
-          "Output processing command. Display selection if not given." },
-        { COMO_OPT_SINGLE, "auto", "-a", "Current dir entries as input and execute <auto>." },
-        { COMO_OPT_ANY, "join", "-j", "Join selection with <join> (default <join>: \" \")." },
-        { COMO_SWITCH, "presel", "-p", "Preselect all." },
-        { COMO_OPT_MULTI, "presel_list", "-pl", "Preselect listed lines (1..n)." },
-        { COMO_OPT_SINGLE, "presel_file", "-pf", "Preselect listed lines from <presel_file>." },
-        { COMO_SWITCH, "batch", "-b", "Batch mode (requires preselection)." },
-        { COMO_SWITCH, "selected", "-s", "Show selected line number at exit." },
+          "input", "-i",
+                   "Input list generation command." },
         { COMO_OPT_ANY,
-          "no_exec",
-          "-x",
-          "No execution, display/store command(s) to <no_exec> (default: stdout)." } );
+          "list", "-l",
+                  "Directory listing as input (default: <curdir>)." },
+        { COMO_OPT_SINGLE,
+          "command", "-c",
+                     "Output processing command. Display selection if not given." },
+        { COMO_OPT_SINGLE,
+          "auto", "-a",
+                  "Current dir entries as input and execute <auto>." },
+        { COMO_OPT_ANY,
+          "join", "-j",
+                  "Join selection with <join> (default <join>: \" \")." },
+        { COMO_SWITCH,
+          "presel", "-p",
+                    "Preselect all." },
+        { COMO_OPT_MULTI,
+          "presel_list", "-pl",
+                         "Preselect listed lines (1..n)." },
+        { COMO_OPT_SINGLE,
+          "presel_file", "-pf",
+                         "Preselect listed lines from <presel_file>." },
+        { COMO_SWITCH,
+          "batch", "-b",
+                   "Batch mode (requires preselection)." },
+        { COMO_SWITCH,
+          "selected", "-s",
+                      "Show selected line number at exit." },
+        { COMO_OPT_ANY,
+          "no_exec", "-x",
+                     "No execution, output command(s) to <no_exec> (default: stdout)." }
+        );
+    /* clang-format on */
 
     sprintf( header, "\n  take - List Selector v%s\n\n", take_version );
     como_conf_header( header );
