@@ -349,9 +349,12 @@ void select_lines_display( select_lines_t sl )
 
     line_status_update( sl );
 
-    prompt_refresh( &sl->line_status );
-    prompt_refresh( &sl->find_status );
-    prompt_refresh( &sl->prompt );
+//     prompt_refresh( &sl->line_status );
+//     prompt_refresh( &sl->find_status );
+//     prompt_refresh( &sl->prompt );
+    prompt_update( &sl->line_status );
+    prompt_update( &sl->find_status );
+    prompt_update( &sl->prompt );
 
     screen_clear_win( wi );
 
@@ -388,7 +391,8 @@ void select_lines_display( select_lines_t sl )
     screen_setpos( wi, 0, sl->curline - sl->firstline );
 
     if ( prompt_interacting( &sl->prompt ) ) {
-        prompt_refresh( &sl->prompt );
+        // prompt_refresh( &sl->prompt );
+        prompt_update( &sl->prompt );
     }
 
     screen_refresh( wi );

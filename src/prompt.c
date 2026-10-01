@@ -120,6 +120,36 @@ void prompt_msg( prompt_t p, const char* msg )
  *
  * @param p Prompt object.
  */
+void prompt_update( prompt_t p )
+{
+//     screen_clear_win( p->wi );
+
+    if ( !plss_is_empty( &p->label ) ) {
+        screen_setpos( p->wi, 0, 0 );
+        screen_set_str2( p->wi, plss_string( &p->label ) );
+    }
+
+    if ( prompt_interacting( p ) ) {
+        const char* view;
+
+        screen_setpos( p->wi, p->x0, 0 );
+        view = plss_string( &p->buf );
+        view += p->b0;
+        screen_set_str2( p->wi, view );
+
+        screen_setpos( p->wi, x_pos( p ), 0 );
+    }
+
+//     screen_refresh( p->wi );
+}
+
+
+/**
+ * Refresh prompt content on screen, i.e. label and possible user
+ * input.
+ *
+ * @param p Prompt object.
+ */
 void prompt_refresh( prompt_t p )
 {
     screen_clear_win( p->wi );

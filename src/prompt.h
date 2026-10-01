@@ -29,6 +29,7 @@ void        prompt_open_buffer( prompt_t p );
 void        prompt_close_buffer( prompt_t p );
 void        prompt_label( prompt_t p, const char* prompt );
 void        prompt_msg( prompt_t p, const char* msg );
+void        prompt_update( prompt_t p );
 void        prompt_refresh( prompt_t p );
 pl_bool_t   prompt_interacting( prompt_t p );
 const char* prompt_interact( prompt_t p, const char* label );
