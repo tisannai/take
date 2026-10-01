@@ -1728,7 +1728,7 @@ int main( int argc, char** argv )
     char       header[ 128 ];
 
     /* clang-format off */
-    como_command(
+    como_maincmd(
         "take",
         "Tero Isannainen",
         "2015, 2025",
