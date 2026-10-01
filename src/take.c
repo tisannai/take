@@ -41,7 +41,7 @@
 
 
 /* abu-version */
-const char* take_version = "0.1.0";
+const char* take_version = "0.1.1";
 
 #define ENABLE_MARK_COLOR
 
@@ -104,6 +104,38 @@ static plcm_s strbuf;
 
 /** Buffer used for line reading from FILE handles. */
 static plcm_s textlinebuf;
+
+
+static char* help_list[] = {
+    "  J: Toggle selection and move down",
+    "  K: Toggle selection and move up",
+    "  j: Move down",
+    "  k: Move up",
+    "  n: Move down page",
+    "  p: Move up page",
+    "  b: Move to beginning of list",
+    "  e: Move to end of list",
+    "  g: Goto to line",
+    "  s: Select current",
+    "  r: Reject current",
+    "  t: Toggle current",
+    "  S: Select all items",
+    "  R: Reject all items",
+    "  T: Toggle all items",
+    "  c: Toggle the next <count> items",
+    "  m: Select items matching the prompted regexp (case sensitive)",
+    "  M: Select items matching the prompted regexp (case insensitive)",
+    "  f: Find mode with case sensitive matching (Keys: j,k,s,r,t,RET,ESC)",
+    "  F: Find mode with case insensitive matching (Keys: j,k,s,r,t,RET,ESC)",
+    "  v: View the list of commands that would be executed",
+    "  i: View the current list entry content (if a text file)",
+    "  l: Center list view on screen around current line",
+    "  h: Show command help",
+    "  x: Quit and execute output-command for selection",
+    "  q: Quit and skip output-command execution",
+    NULL
+};
+
 
 
 /** Default breakpoint. */
@@ -201,6 +233,15 @@ void take_error( const char* format, ... )
     vfprintf( stderr, format, ap );
     fputc( '\n', stderr );
     va_end( ap );
+}
+
+
+static pl_none cli_documentation( pl_none )
+{
+    for ( int i = 0; help_list[ i ]; i++ ) {
+        puts( help_list[ i ] );
+    }
+    take_exit( EXIT_FAILURE );
 }
 
 
@@ -790,36 +831,6 @@ void select_lines_view( select_lines_t sl, select_lines_t view_sl )
  */
 void show_command_help( select_lines_t sl )
 {
-    static char* help_list[] = {
-        "\"J\": Toggle selection and move down",
-        "\"K\": Toggle selection and move up",
-        "\"j\": Move down",
-        "\"k\": Move up",
-        "\"n\": Move down page",
-        "\"p\": Move up page",
-        "\"b\": Move to beginning of list",
-        "\"e\": Move to end of list",
-        "\"g\": Goto to line",
-        "\"s\": Select current",
-        "\"r\": Reject current",
-        "\"t\": Toggle current",
-        "\"S\": Select all items",
-        "\"R\": Reject all items",
-        "\"T\": Toggle all items",
-        "\"c\": Toggle the next \"count\" items",
-        "\"m\": Select items matching the prompted regexp (case sensitive)",
-        "\"M\": Select items matching the prompted regexp (case insensitive)",
-        "\"f\": Find mode with case sensitive matching (Keys: j,k,s,r,t,RET,ESC)",
-        "\"F\": Find mode with case insensitive matching (Keys: j,k,s,r,t,RET,ESC)",
-        "\"v\": View the list of commands that would be executed",
-        "\"i\": View the current list entry content (if a text file)",
-        "\"l\": Center list view on screen around current line",
-        "\"h\": Show command help",
-        "\"x\": Quit and execute output-command for selection",
-        "\"q\": Quit and skip output-command execution",
-        NULL
-    };
-
     select_lines_s help_sl;
     plam_s         talloc;
     plam_use_plam( &talloc, &balloc, balloc_cont_size );
@@ -1721,6 +1732,9 @@ int main( int argc, char** argv )
         "take",
         "Tero Isannainen",
         "2015, 2025",
+        { COMO_EXCLUSIVE,
+          "doc", "-d",
+                 "Documentation (quick guide)." },
         { COMO_OPT_SINGLE,
           "input", "-i",
                    "Input list generation command." },
@@ -1757,10 +1771,17 @@ int main( int argc, char** argv )
         );
     /* clang-format on */
 
+    opt = como_opt( "doc" );
+    opt->type = COMO_P_NONE | COMO_P_OPT | COMO_P_MUTEX;
+
     sprintf( header, "\n  take - List Selector v%s\n\n", take_version );
     como_conf_header( header );
 
     como_finish();
+
+    if ( ( opt = como_given( "doc" ) ) ) {
+        cli_documentation();
+    }
 
 
 #ifdef ml_do_debug

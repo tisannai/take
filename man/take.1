@@ -2,12 +2,12 @@
 .\"     Title: take
 .\"    Author: [see the "AUTHOR" section]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 05/05/2025
+.\"      Date: 09/30/2026
 .\"    Manual: \ \&
 .\"    Source: \ \&
 .\"  Language: English
 .\"
-.TH "TAKE" "1" "05/05/2025" "\ \&" "\ \&"
+.TH "TAKE" "1" "09/30/2026" "\ \&" "\ \&"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -80,32 +80,32 @@ The selection is performed using the following one\-key commands:
 .RS 4
 .\}
 .nf
-"J": Toggle selection and move down
-"K": Toggle selection and move up
-"j": Move down
-"k": Move up
-"n": Move down page
-"p": Move up page
-"b": Move to beginning of list
-"e": Move to end of list
-"g": Goto to <line> (or relative with +/\- <line>)
-"s": Select current
-"r": Reject current
-"t": Toggle current
-"S": Select all items
-"R": Reject all items
-"T": Toggle all items
-"c": Toggle the next <count> items (or set/reset with +/\- <count>)
-"m": Select items matching the prompted regexp (case sensitive)
-"M": Select items matching the prompted regexp (case insensitive)
-"f": Find mode with case sensitive matching (Keys: j,k,s,r,t,RET,ESC)
-"F": Find mode with case insensitive matching (Keys: j,k,s,r,t,RET,ESC)
-"v": View the list of commands that would be executed
-"i": View the current list entry content (if a text file)
-"l": Center list view on screen around current line
-"h": Show command help
-"x": Quit and execute output\-command for selection
-"q": Quit and skip output\-command execution
+J: Toggle selection and move down
+K: Toggle selection and move up
+j: Move down
+k: Move up
+n: Move down page
+p: Move up page
+b: Move to beginning of list
+e: Move to end of list
+g: Goto to <line> (or relative with +/\- <line>)
+s: Select current
+r: Reject current
+t: Toggle current
+S: Select all items
+R: Reject all items
+T: Toggle all items
+c: Toggle the next <count> items (or set/reset with +/\- <count>)
+m: Select items matching the prompted regexp (case sensitive)
+M: Select items matching the prompted regexp (case insensitive)
+f: Find mode with case sensitive matching (Keys: j,k,s,r,t,RET,ESC)
+F: Find mode with case insensitive matching (Keys: j,k,s,r,t,RET,ESC)
+v: View the list of commands that would be executed
+i: View the current list entry content (if a text file)
+l: Center list view on screen around current line
+h: Show command help
+x: Quit and execute output\-command for selection
+q: Quit and skip output\-command execution
 .fi
 .if n \{\
 .RE
@@ -124,7 +124,7 @@ If files are to be removed with \fBtake\fR, it is sensible to check the list of 
 Press "h" for online command help display\&.
 .SH "OUTPUT COMMAND FORMATTING"
 .sp
-The output\-command syntax has a special tag ("@") for transferring the selection into the output\-command(s)\&. "@" is replaced with the selected item before output\-command is executed\&. "@" may appear multiple times in the command\&. "@_" means literal "@" in the output, i\&.e\&. if the user needs the "@" character in the output and not an item from the list selection\&.
+The output\-command syntax has a special tag ("@") for transferring the selection into the output\-command(s)\&. "@" is replaced with the selected item before output\-command is executed\&. "@" may appear multiple times in the command\&. "%@" means literal "@" in the output, i\&.e\&. if the user needs the "@" character in the output and not an item from the list selection\&. "%%" means the literal "%" in the output\&.
 .sp
 By default the output\-command is executed once per selected line\&. The \fI\-j\fR switch can be used to join selection with <join> string\&. <join> string is " " by default\&. If selection is joined, the output\-command is executed only once and "@" is replaced with the joined selection\&.
 .sp
@@ -199,7 +199,7 @@ Example4: Echo input list selection with items surrounded by \fI@@\fR strings\&.
 .RS 4
 .\}
 .nf
-  shell> take \-a \*(Aqecho @_@_@@_@_\*(Aq
+  shell> take \-a \*(Aqecho %@%@@%@%@\*(Aq
 .fi
 .if n \{\
 .RE
@@ -322,7 +322,7 @@ and later used in a script\&.
 .RS 4
 Command given with
 \fB\-\-command\fR
-is not executed if this option is given\&. Instread the commands are stored to a file\&. Option parameter defines the name of the output file\&. If omitted, STDOUT is used\&.
+is not executed if this option is given\&. Instead the commands are stored to a file\&. Option parameter defines the name of the output file\&. If omitted, STDOUT is used\&.
 .RE
 .SH "EXIT STATUS"
 .PP

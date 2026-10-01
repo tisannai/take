@@ -64,32 +64,32 @@ In the example list items "Item1" and "Item2" are selected and item
 
 The selection is performed using the following one-key commands:
 
-  "J": Toggle selection and move down
-  "K": Toggle selection and move up
-  "j": Move down
-  "k": Move up
-  "n": Move down page
-  "p": Move up page
-  "b": Move to beginning of list
-  "e": Move to end of list
-  "g": Goto to <line> (or relative with +/- <line>)
-  "s": Select current
-  "r": Reject current
-  "t": Toggle current
-  "S": Select all items
-  "R": Reject all items
-  "T": Toggle all items
-  "c": Toggle the next <count> items (or set/reset with +/- <count>)
-  "m": Select items matching the prompted regexp (case sensitive)
-  "M": Select items matching the prompted regexp (case insensitive)
-  "f": Find mode with case sensitive matching (Keys: j,k,s,r,t,RET,ESC)
-  "F": Find mode with case insensitive matching (Keys: j,k,s,r,t,RET,ESC)
-  "v": View the list of commands that would be executed
-  "i": View the current list entry content (if a text file)
-  "l": Center list view on screen around current line
-  "h": Show command help
-  "x": Quit and execute output-command for selection
-  "q": Quit and skip output-command execution
+  J: Toggle selection and move down
+  K: Toggle selection and move up
+  j: Move down
+  k: Move up
+  n: Move down page
+  p: Move up page
+  b: Move to beginning of list
+  e: Move to end of list
+  g: Goto to <line> (or relative with +/- <line>)
+  s: Select current
+  r: Reject current
+  t: Toggle current
+  S: Select all items
+  R: Reject all items
+  T: Toggle all items
+  c: Toggle the next <count> items (or set/reset with +/- <count>)
+  m: Select items matching the prompted regexp (case sensitive)
+  M: Select items matching the prompted regexp (case insensitive)
+  f: Find mode with case sensitive matching (Keys: j,k,s,r,t,RET,ESC)
+  F: Find mode with case insensitive matching (Keys: j,k,s,r,t,RET,ESC)
+  v: View the list of commands that would be executed
+  i: View the current list entry content (if a text file)
+  l: Center list view on screen around current line
+  h: Show command help
+  x: Quit and execute output-command for selection
+  q: Quit and skip output-command execution
 
 
 Typically the user presses "j" with or without SHIFT, i.e. moves down
