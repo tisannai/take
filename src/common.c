@@ -11,9 +11,6 @@
 #include "common.h"
 
 
-plam_s balloc;
-
-
 /** File handle for debug IO. */
 static FILE* dbug_fh = NULL;
 
