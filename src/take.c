@@ -80,10 +80,11 @@ pl_struct( select_line )
     pl_bool_t   marked; /**< Selected flag. */
 };
 
+
 /** Collection of selectable lines with viewing info. */
 pl_struct( lines_view )
 {
-    plcm_s   lines;     /**< Line container. */
+    plcm_s   lines;     /**< Line container for select_line. */
     pl_pos_t firstline; /**< First visible line index. */
     pl_pos_t curline;   /**< Current line index. */
     plam_t   alloc;     /**< Allocator. */
@@ -93,9 +94,10 @@ pl_struct( lines_view )
 /** Collection of selectable lines with viewing info. */
 pl_struct( select_lines )
 {
-    lines_view_t lv;
-    tm_color_s   unmark_color;
-    tm_color_s   mark_color;
+    lines_view_t lv;           /**< Current lines_view. */
+    td_point_s   screen_dims;  /**< Screen dimensions. */
+    tm_color_s   unmark_color; /**< Color for unmarked lines. */
+    tm_color_s   mark_color;   /**< Color for marked lines. */
     char*        user_message; /**< Message for the user. */
     int          line_status;  /**< Line mode Status. */
     char*        find_status;  /**< Find mode Status. */
@@ -113,13 +115,17 @@ static plam_s balloc;
 static termal_s tm;
 
 
-/** Arbitrary length string buffer. Used from multiple functions. */
-static plcm_s strbuf;
+/** Arbitrary length string buffer. Used from multiple functions for
+    temporary storage for building new values. */
+static plcm_s work_buf;
 
 /** Buffer used for line reading from FILE handles. */
-static plcm_s textlinebuf;
+static plcm_s line_buf;
 
-td_point_s screen_dims; /**< Screen dimensions. */
+/** Buffer for user inputs. Overlapping lifetime to work_buf and
+    therefore needs to be separate. */
+static plcm_s user_buf;
+
 
 
 static char* help_list[] = {
@@ -154,37 +160,17 @@ static char* help_list[] = {
 
 
 
-/** Default breakpoint. */
-void gdb_break( void )
-{
-    return;
-}
-
-
-/**
- * Return a line from file stream, without the newline.
- */
-plcm_t get_line_from_file( FILE* fh )
-{
-    return plss_read_line( &textlinebuf, fh );
-}
-
-
 /**
  * Exit program.
  *
  */
-void take_exit( int status )
+static void take_exit( int status )
 {
     /* Cleanup everything. */
 
     plam_del( &balloc );
-    plcm_del( &textlinebuf );
-    plcm_del( &strbuf );
-
-#ifdef ml_do_debug
-    ml_dbug_close();
-#endif
+    plcm_del( &line_buf );
+    plcm_del( &work_buf );
 
     if ( termal_is_open( &tm ) ) {
         termal_close( &tm );
@@ -199,7 +185,7 @@ void take_exit( int status )
  *
  * @param signo Signal number (not used).
  */
-void take_sig_handler( int signo )
+static void take_sig_handler( int signo )
 {
     take_exit( EXIT_FAILURE );
 }
@@ -210,7 +196,7 @@ void take_sig_handler( int signo )
  *
  * @param format Format string for message.
  */
-void take_fatal( const char* format, ... )
+static void take_fatal( const char* format, ... )
 {
     va_list ap;
     va_start( ap, format );
@@ -227,7 +213,7 @@ void take_fatal( const char* format, ... )
  *
  * @param format Format string for message.
  */
-void take_error( const char* format, ... )
+static void take_error( const char* format, ... )
 {
     va_list ap;
     va_start( ap, format );
@@ -238,12 +224,28 @@ void take_error( const char* format, ... )
 }
 
 
+/**
+ * Display user documentation.
+ *
+ * @param pl_none
+ *
+ * @return
+ */
 static pl_none cli_documentation( pl_none )
 {
     for ( int i = 0; help_list[ i ]; i++ ) {
         puts( help_list[ i ] );
     }
     take_exit( EXIT_FAILURE );
+}
+
+
+/**
+ * Return a line from file stream, without the newline.
+ */
+static plcm_t get_line_from_file( FILE* fh )
+{
+    return plss_read_line( &line_buf, fh );
 }
 
 
@@ -280,6 +282,15 @@ static pl_size_t lines_view_count( lines_view_t lv )
 }
 
 
+/**
+ * Initialize select_lines struct.
+ *
+ * @param sl     Select-lines handle.
+ * @param lv     Lines-view handle.
+ * @param alloc  Allocator for select-lines.
+ *
+ * @return None.
+ */
 static pl_none select_lines_init( select_lines_t sl, lines_view_t lv, plam_t alloc )
 {
     sl->lv = lv;
@@ -300,7 +311,7 @@ static pl_none select_lines_init( select_lines_t sl, lines_view_t lv, plam_t all
  *
  * @return Line container.
  */
-pl_none lines_view_new( lines_view_t lv, plam_t alloc, pl_size_t init_line_count )
+static pl_none lines_view_new( lines_view_t lv, plam_t alloc, pl_size_t init_line_count )
 {
     plcm_use_plam( &lv->lines, alloc, init_line_count * sizeof( select_line_s ) );
     lv->firstline = 0;
@@ -325,28 +336,82 @@ static lines_view_t lines_view_rem( lines_view_t lv )
 }
 
 
+/**
+ * Return screen index of y-axis.
+ *
+ * @param sl     Select-lines handle.
+ *
+ * @return Index.
+ */
 static pl_pos_t screen_line( select_lines_t sl )
 {
     return ( sl->lv->curline - sl->lv->firstline );
 }
 
 
-static pl_pos_t screen_bottom_line( pl_none )
+/**
+ * Return status line index on screen.
+ *
+ * @param sl     Select-lines handle.
+ *
+ * @return Index.
+ */
+static pl_pos_t screen_status_line( select_lines_t sl )
 {
-    return screen_dims.y - 1;
+    return sl->screen_dims.y - 1;
 }
 
 
-static tm_prompt_t prompt_user( char* prompt, plcm_t text )
+/**
+ * Return last lines-view line index.
+ *
+ * @param sl     Select-lines handle.
+ *
+ * @return Index.
+ */
+static pl_pos_t screen_last_view_line( select_lines_t sl )
+{
+    return sl->screen_dims.y - 2;
+}
+
+
+/**
+ * Normalize current line after terminal size have (potentially)
+ * changed.
+ *
+ * @param sl     Select-lines handle.
+ *
+ * @return None.
+ */
+static pl_none normalize_lines_view( select_lines_t sl )
+{
+    if ( screen_line( sl ) > screen_last_view_line( sl ) ) {
+        sl->lv->firstline = sl->lv->curline - screen_last_view_line( sl );
+    }
+}
+
+
+/**
+ * Prompt input from user.
+ *
+ * @param sl     Select-lines handle.
+ * @param prompt Prompt text.
+ * @param text   User response storage.
+ *
+ * @return Prompt status.
+ */
+static tm_prompt_t prompt_user( select_lines_t sl, char* prompt, plcm_t text )
 {
     tm_prompt_t res;
+
     plcm_clear( text );
     res = termal_prompt( &tm,
                          plsr_from_string( prompt ),
-                         td_point_make( 0, screen_dims.y - 1 ),
-                         screen_dims.x - 4,
+                         td_point_make( 0, sl->screen_dims.y - 1 ),
+                         sl->screen_dims.x - 4,
                          text,
                          pl_true );
+
     return res;
 }
 
@@ -356,25 +421,25 @@ static tm_prompt_t prompt_user( char* prompt, plcm_t text )
  *
  * @param sl Select_lines object.
  */
-void line_status_update( select_lines_t sl )
+static void line_status_update( select_lines_t sl )
 {
     /* Create line number display. */
-    plcm_clear( &strbuf );
-    plss_format_string( &strbuf, " %7d", (int)( sl->lv->curline + 1 ) );
-    plss_format_string( &strbuf, "  " );
+    plcm_clear( &work_buf );
+    plss_format_string( &work_buf, " %7d", (int)( sl->lv->curline + 1 ) );
+    plss_format_string( &work_buf, "  " );
     if ( sl->find_status ) {
-        plss_format_string( &strbuf, "%s", sl->find_status );
+        plss_format_string( &work_buf, "%s   ", sl->find_status );
     } else {
-        plss_format_string( &strbuf, " " );
+        plss_format_string( &work_buf, "    " );
     }
 
     if ( sl->user_message ) {
-        plss_format_string( &strbuf, "%s", sl->user_message );
+        plss_format_string( &work_buf, "%s", sl->user_message );
     }
 
     termal_draw_string_in_color( &tm,
-                                 td_point_make( 0, screen_bottom_line() ),
-                                 plsr_from_plcm( &strbuf ),
+                                 td_point_make( 0, screen_status_line( sl ) ),
+                                 plsr_from_plcm( &work_buf ),
                                  sl->unmark_color );
 }
 
@@ -385,7 +450,7 @@ void line_status_update( select_lines_t sl )
  *
  * @param sl Select_lines object.
  */
-void select_lines_display( select_lines_t sl )
+static void select_lines_display( select_lines_t sl )
 {
     select_line_t line;
 
@@ -393,32 +458,32 @@ void select_lines_display( select_lines_t sl )
 
     /* Show all visible lines or upto end of list. */
     for ( int i = 0;
-          ( i < screen_bottom_line() - 2 ) &&
+          ( i < screen_status_line( sl ) ) &&
           ( ( sl->lv->firstline + i ) < ( plcm_used_for_type( &sl->lv->lines, select_line_s ) ) );
           i++ ) {
         line = lines_view_ref( sl->lv, sl->lv->firstline + i );
-        plcm_reset( &strbuf );
+        plcm_reset( &work_buf );
 
 #ifdef ENABLE_MARK_COLOR
 
-        plss_format_string( &strbuf, "%s", line->text );
+        plss_format_string( &work_buf, "%s", line->text );
         if ( line->marked ) {
             termal_draw_string_in_color(
-                &tm, td_point_make( 0, i ), plsr_from_plcm( &strbuf ), sl->mark_color );
+                &tm, td_point_make( 0, i ), plsr_from_plcm( &work_buf ), sl->mark_color );
         } else {
             termal_draw_string_in_color(
-                &tm, td_point_make( 0, i ), plsr_from_plcm( &strbuf ), sl->unmark_color );
+                &tm, td_point_make( 0, i ), plsr_from_plcm( &work_buf ), sl->unmark_color );
         }
 
 #else
         if ( line->marked ) {
-            plss_format_string( &strbuf, "* %s", line->text );
+            plss_format_string( &work_buf, "* %s", line->text );
         } else {
-            plss_format_string( &strbuf, "  %s", line->text );
+            plss_format_string( &work_buf, "  %s", line->text );
         }
 
         termal_draw_string_in_color(
-            &tm, td_point_make( 0, i ), plss_string( &strbuf ), sl->unmark_color );
+            &tm, td_point_make( 0, i ), plss_string( &work_buf ), sl->unmark_color );
 #endif
     }
 
@@ -435,7 +500,7 @@ void select_lines_display( select_lines_t sl )
  *
  * @param sl Select_lines object.
  */
-void select_lines_toggle_mark( select_lines_t sl )
+static void select_lines_toggle_mark( select_lines_t sl )
 {
     select_line_t line;
     line = lines_view_ref( sl->lv, sl->lv->curline );
@@ -453,7 +518,7 @@ void select_lines_toggle_mark( select_lines_t sl )
  * @param sl Select_lines object.
  * @param marked Value for marked status.
  */
-void select_lines_set_mark_to( select_lines_t sl, pl_bool_t marked )
+static void select_lines_set_mark_to( select_lines_t sl, pl_bool_t marked )
 {
     select_line_t line;
     line = lines_view_ref( sl->lv, sl->lv->curline );
@@ -466,7 +531,7 @@ void select_lines_set_mark_to( select_lines_t sl, pl_bool_t marked )
  *
  * @param sl Select_lines object.
  */
-void select_lines_set_mark( select_lines_t sl )
+static void select_lines_set_mark( select_lines_t sl )
 {
     select_lines_set_mark_to( sl, pl_true );
 }
@@ -477,7 +542,7 @@ void select_lines_set_mark( select_lines_t sl )
  *
  * @param sl Select_lines object.
  */
-void select_lines_reset_mark( select_lines_t sl )
+static void select_lines_reset_mark( select_lines_t sl )
 {
     select_lines_set_mark_to( sl, pl_false );
 }
@@ -491,13 +556,13 @@ void select_lines_reset_mark( select_lines_t sl )
  *
  * @return Number of step performed.
  */
-int select_lines_move_down_n( select_lines_t sl, int n )
+static int select_lines_move_down_n( select_lines_t sl, int n )
 {
     int i;
 
     for ( i = 0; i < n; i++ ) {
         if ( sl->lv->curline < lines_view_count( sl->lv ) - 1 ) {
-            if ( screen_line( sl ) >= screen_bottom_line() ) {
+            if ( screen_line( sl ) >= screen_last_view_line( sl ) ) {
                 sl->lv->firstline++;
             }
             sl->lv->curline++;
@@ -517,7 +582,7 @@ int select_lines_move_down_n( select_lines_t sl, int n )
  *
  * @return True if success.
  */
-pl_bool_t select_lines_move_down( select_lines_t sl )
+static pl_bool_t select_lines_move_down( select_lines_t sl )
 {
     if ( select_lines_move_down_n( sl, 1 ) == 1 ) {
         return pl_true;
@@ -535,7 +600,7 @@ pl_bool_t select_lines_move_down( select_lines_t sl )
  *
  * @return Number of step performed.
  */
-int select_lines_move_up_n( select_lines_t sl, int n )
+static int select_lines_move_up_n( select_lines_t sl, int n )
 {
     int i;
 
@@ -561,7 +626,7 @@ int select_lines_move_up_n( select_lines_t sl, int n )
  *
  * @return True if success.
  */
-pl_bool_t select_lines_move_up( select_lines_t sl )
+static pl_bool_t select_lines_move_up( select_lines_t sl )
 {
     if ( select_lines_move_up_n( sl, 1 ) == 1 ) {
         return pl_true;
@@ -577,7 +642,7 @@ pl_bool_t select_lines_move_up( select_lines_t sl )
  * @param sl Select_lines object.
  * @param cmd Shell command.
  */
-void list_from_command( select_lines_t sl, const char* cmd )
+static void list_from_command( select_lines_t sl, const char* cmd )
 {
     FILE* fh;
 
@@ -589,7 +654,7 @@ void list_from_command( select_lines_t sl, const char* cmd )
 
     for ( ;; ) {
         if ( get_line_from_file( fh ) ) {
-            lines_view_add( sl->lv, &textlinebuf );
+            lines_view_add( sl->lv, &line_buf );
         } else {
             break;
         }
@@ -607,7 +672,7 @@ void list_from_command( select_lines_t sl, const char* cmd )
  *
  * @return strcmp return values.
  */
-int list_sort_cmp( const void* a, const void* b )
+static int list_sort_cmp( const void* a, const void* b )
 {
     const char** ia = (const char**)a;
     const char** ib = (const char**)b;
@@ -622,7 +687,7 @@ int list_sort_cmp( const void* a, const void* b )
  * @param sl Select_lines object.
  * @param dirname Directory name for listing.
  */
-void list_from_dir( select_lines_t sl, const char* dirname )
+static void list_from_dir( select_lines_t sl, const char* dirname )
 {
     DIR*           dir;
     struct dirent* entry;
@@ -653,8 +718,8 @@ void list_from_dir( select_lines_t sl, const char* dirname )
         /* Add sorted entries to lines list with dirname. */
         for ( char** tmpname = plcm_data( &unsorted ); tmpname < (char**)plcm_end( &unsorted );
               tmpname++ ) {
-            plss_reformat_string( &strbuf, "%s/%s", dirname, *tmpname );
-            lines_view_add( sl->lv, &strbuf );
+            plss_reformat_string( &work_buf, "%s/%s", dirname, *tmpname );
+            lines_view_add( sl->lv, &work_buf );
         }
 
         plcm_del( &unsorted );
@@ -669,13 +734,14 @@ void list_from_dir( select_lines_t sl, const char* dirname )
  *
  * @param sl Select_lines object.
  */
-void list_from_stdin( select_lines_t sl )
+static void list_from_stdin( select_lines_t sl )
 {
-    FILE* fh = stdin;
+    FILE* fh;
 
+    fh = stdin;
     for ( ;; ) {
         if ( get_line_from_file( fh ) ) {
-            lines_view_add( sl->lv, &textlinebuf );
+            lines_view_add( sl->lv, &line_buf );
         } else {
             break;
         }
@@ -691,7 +757,7 @@ void list_from_stdin( select_lines_t sl )
  * @param [in] arg Replacement for special chars.
  * @param [out] buf String buffer for replacement result.
  */
-void process_cmd_escapes( char* cmd, const char* arg, plcm_t buf )
+static void process_cmd_escapes( char* cmd, const char* arg, plcm_t buf )
 {
     /* Char index for cmd string. */
     int ci;
@@ -741,7 +807,7 @@ void process_cmd_escapes( char* cmd, const char* arg, plcm_t buf )
  * @param cmd Command to execute (or store).
  * @param fh Output stream (or NULL).
  */
-void execute_cmd( const char* cmd, FILE* fh )
+static void execute_cmd( const char* cmd, FILE* fh )
 {
     if ( fh ) {
         fputs( cmd, fh );
@@ -783,15 +849,15 @@ void execute_cmd( const char* cmd, FILE* fh )
  * @param sl Select_lines object.
  * @param view_sl View list.
  */
-void select_lines_view( select_lines_t sl )
+static void select_lines_view( select_lines_t sl )
 {
-    /* Display all lines. */
-    select_lines_display( sl );
-
     int       key;
     pl_pos_t  cur;
     pl_pos_t  max;
     pl_bool_t done;
+
+    /* Display all lines. */
+    select_lines_display( sl );
 
     done = pl_false;
 
@@ -811,21 +877,21 @@ void select_lines_view( select_lines_t sl )
 
             case 'n':
                 cur = screen_line( sl );
-                max = screen_bottom_line() - 1;
+                max = screen_last_view_line( sl );
                 if ( cur != max ) {
                     select_lines_move_down_n( sl, max - cur );
                 } else {
-                    select_lines_move_down_n( sl, max );
+                    select_lines_move_down_n( sl, max + 1 );
                 }
                 break;
 
             case 'p':
                 cur = screen_line( sl );
-                max = screen_bottom_line() - 1;
+                max = screen_last_view_line( sl );
                 if ( cur != 0 ) {
                     select_lines_move_up_n( sl, cur );
                 } else {
-                    select_lines_move_up_n( sl, max );
+                    select_lines_move_up_n( sl, max + 1 );
                 }
                 break;
 
@@ -850,7 +916,7 @@ void select_lines_view( select_lines_t sl )
  *
  * @param sl Select_lines object.
  */
-void show_command_help( select_lines_t sl )
+static void show_command_help( select_lines_t sl )
 {
     lines_view_s help_lv;
     plam_s       talloc;
@@ -870,6 +936,7 @@ void show_command_help( select_lines_t sl )
     lines_view_rem( &help_lv );
     plam_put( &balloc, balloc_cont_size );
     sl->lv = org_lv;
+    normalize_lines_view( sl );
 }
 
 
@@ -879,7 +946,7 @@ void show_command_help( select_lines_t sl )
  * @param sl Select_lines object.
  * @param filename Filename for file to display.
  */
-void show_file_content( select_lines_t sl, const char* filename )
+static void show_file_content( select_lines_t sl, const char* filename )
 {
     FILE* fh;
 
@@ -900,8 +967,7 @@ void show_file_content( select_lines_t sl, const char* filename )
 
     for ( ;; ) {
         if ( get_line_from_file( fh ) ) {
-            /* Remove newline. */
-            lines_view_add( &file_lv, &textlinebuf );
+            lines_view_add( &file_lv, &line_buf );
         } else {
             break;
         }
@@ -911,6 +977,7 @@ void show_file_content( select_lines_t sl, const char* filename )
     lines_view_rem( &file_lv );
     plam_put( &balloc, balloc_cont_size );
     sl->lv = org_lv;
+    normalize_lines_view( sl );
 
     fclose( fh );
 }
@@ -919,11 +986,13 @@ void show_file_content( select_lines_t sl, const char* filename )
 /**
  * Create a list of shell command executions for selected items.
  *
- * @param sl Select_lines object.
+ * @param sl     Select_lines object.
+ * @param cmds   Lines-view for commands.
+ * @param talloc Allocator for commands.
  *
- * @return Command list.
+ * @return None.
  */
-pl_none select_lines_create_commands( select_lines_t sl, lines_view_t cmds, plam_t talloc )
+static pl_none select_lines_create_commands( select_lines_t sl, lines_view_t cmds, plam_t talloc )
 {
     como_opt_t opt;
     char*      command = NULL;
@@ -942,7 +1011,7 @@ pl_none select_lines_create_commands( select_lines_t sl, lines_view_t cmds, plam
     }
 
 
-    lines_view_new( sl->lv, talloc, plcm_used_for_type( &sl->lv->lines, select_line_s ) );
+    lines_view_new( cmds, talloc, plcm_used_for_type( &sl->lv->lines, select_line_s ) );
 
     if ( ( opt = como_given( "join" ) ) ) {
 
@@ -956,37 +1025,38 @@ pl_none select_lines_create_commands( select_lines_t sl, lines_view_t cmds, plam
             join_str = " ";
         }
 
-        pl_bool_t nonfirst = pl_false;
+        pl_bool_t nonfirst;
         plsr_s    join;
 
+        nonfirst = pl_false;
         join = plsr_from_string( join_str );
 
-        plcm_reset( &strbuf );
+        plcm_reset( &work_buf );
         for ( select_line_t line = plcm_data( &sl->lv->lines );
               (pl_t)line < plcm_end( &sl->lv->lines );
               line++ ) {
             if ( line->marked ) {
                 if ( nonfirst ) {
-                    plss_append( &strbuf, join );
+                    plss_append( &work_buf, join );
                 } else {
                     nonfirst = pl_true;
                 }
-                plss_append_string( &strbuf, line->text );
+                plss_append_string( &work_buf, line->text );
             }
         }
 
 
-        /* Take of &strbuf before its overwritten. */
+        /* Take of &work_buf before its overwritten. */
         plcm_declare( tmpstr, 1024 );
-        plss_append( &tmpstr, plss_ref( &strbuf ) );
+        plss_append( &tmpstr, plss_ref( &work_buf ) );
 
         /* Create command. */
-        process_cmd_escapes( command, plss_string( &tmpstr ), &strbuf );
+        process_cmd_escapes( command, plss_string( &tmpstr ), &work_buf );
 
         /* Free the copy. */
         plcm_del( &tmpstr );
 
-        lines_view_add( sl->lv, &strbuf );
+        lines_view_add( cmds, &work_buf );
 
     } else {
 
@@ -995,8 +1065,8 @@ pl_none select_lines_create_commands( select_lines_t sl, lines_view_t cmds, plam
               (pl_t)line < plcm_end( &sl->lv->lines );
               line++ ) {
             if ( line->marked ) {
-                process_cmd_escapes( command, line->text, &strbuf );
-                lines_view_add( sl->lv, &strbuf );
+                process_cmd_escapes( command, line->text, &work_buf );
+                lines_view_add( cmds, &work_buf );
             }
         }
     }
@@ -1008,11 +1078,10 @@ pl_none select_lines_create_commands( select_lines_t sl, lines_view_t cmds, plam
  *
  * @param re Regex object.
  */
-void regex_rem( regex_t* re )
+static void regex_rem( regex_t* re )
 {
     if ( re ) {
         regfree( re );
-        // pl_free_memory( re );
     }
 }
 
@@ -1026,12 +1095,9 @@ void regex_rem( regex_t* re )
  *
  * @return Regex object (or NULL on failure).
  */
-regex_t* regex_new( regex_t* re, const char* pattern, pl_bool_t case_sensitive )
+static regex_t* regex_new( regex_t* re, const char* pattern, pl_bool_t case_sensitive )
 {
-//     regex_t* re;
-    int      ret;
-
-//     re = pl_alloc_memory( sizeof( regex_t ) );
+    int ret;
 
     if ( case_sensitive ) {
         ret = regcomp( re, pattern, REG_EXTENDED | REG_NOSUB );
@@ -1042,7 +1108,6 @@ regex_t* regex_new( regex_t* re, const char* pattern, pl_bool_t case_sensitive )
     if ( ret != 0 ) {
         /* Failure. */
         regex_rem( re );
-        // re = NULL;
         return NULL;
     }
 
@@ -1057,11 +1122,11 @@ regex_t* regex_new( regex_t* re, const char* pattern, pl_bool_t case_sensitive )
  * @param pattern Regex pattern.
  * @param case_sensitive Case sensitivity option.
  */
-void select_lines_mark_matching( select_lines_t sl, const char* pattern, pl_bool_t case_sensitive )
+static void select_lines_mark_matching( select_lines_t sl,
+                                        const char*    pattern,
+                                        pl_bool_t      case_sensitive )
 {
     regex_t re;
-
-//     regex_new( &re, pattern, case_sensitive );
 
     if ( regex_new( &re, pattern, case_sensitive ) == NULL ) {
         sl->user_message = "Error in regexp!";
@@ -1091,9 +1156,10 @@ void select_lines_mark_matching( select_lines_t sl, const char* pattern, pl_bool
  * @return The number of steps required to selected direction to reach
  *   the line (-1 if re not found).
  */
-pl_pos_t select_lines_find_next( select_lines_t sl, regex_t* re, pl_bool_t forward )
+static pl_pos_t select_lines_find_next( select_lines_t sl, regex_t* re, pl_bool_t forward )
 {
-    pl_pos_t offset, limit;
+    pl_pos_t offset;
+    pl_pos_t limit;
 
     if ( forward ) {
         offset = 1;
@@ -1125,7 +1191,7 @@ pl_pos_t select_lines_find_next( select_lines_t sl, regex_t* re, pl_bool_t forwa
  * @param from State origin.
  * @param to State target.
  */
-void lines_view_save_position( lines_view_t from, lines_view_t to )
+static void lines_view_save_position( lines_view_t from, lines_view_t to )
 {
     to->firstline = from->firstline;
     to->curline = from->curline;
@@ -1139,18 +1205,18 @@ void lines_view_save_position( lines_view_t from, lines_view_t to )
  * @param pattern Regex pattern to search.
  * @param case_sensitive Case sensitivity option.
  */
-void select_lines_find_interactive( select_lines_t sl,
-                                    const char*    pattern,
-                                    pl_bool_t      case_sensitive )
+static void select_lines_find_interactive( select_lines_t sl,
+                                           const char*    pattern,
+                                           pl_bool_t      case_sensitive )
 {
     lines_view_s org_lv;
     lines_view_s prev_lv;
     int          key;
-    pl_bool_t    done = pl_false;
-    pl_bool_t    use_org = pl_false;
+    pl_bool_t    done;
+    pl_bool_t    use_org;
     regex_t      re;
     pl_pos_t     offset;
-    pl_bool_t    first_search = pl_true;
+    pl_bool_t    first_search;
 
     /* Save search start position. */
     org_lv = *sl->lv;
@@ -1163,6 +1229,9 @@ void select_lines_find_interactive( select_lines_t sl,
 
     sl->find_status = "F";
 
+    done = pl_false;
+    use_org = pl_false;
+    first_search = pl_true;
 
     /* Get user input. */
     for ( ;; ) {
@@ -1261,13 +1330,15 @@ void select_lines_find_interactive( select_lines_t sl,
  *
  * @param sl Select_lines object.
  */
-void select_lines_center_view( select_lines_t sl )
+static void select_lines_center_view( select_lines_t sl )
 {
-    int half_cnt = screen_dims.y / 2;
-    int dist = screen_line( sl );
+    int half_cnt;
+    int dist;
     int offset;
     int newfirst;
 
+    half_cnt = sl->screen_dims.y / 2;
+    dist = screen_line( sl );
     offset = dist - half_cnt;
     newfirst = sl->lv->firstline + offset;
     if ( newfirst >= 0 ) {
@@ -1281,20 +1352,21 @@ void select_lines_center_view( select_lines_t sl )
  *
  * @param sl Select_lines object.
  */
-void select_lines_view_commands( select_lines_t sl )
+static void select_lines_view_commands( select_lines_t sl )
 {
     lines_view_s cmds_lv;
     plam_s       talloc;
     lines_view_t org_lv;
 
-    org_lv = sl->lv;
-    sl->lv = &cmds_lv;
     plam_use_plam( &talloc, &balloc, balloc_cont_size );
     select_lines_create_commands( sl, &cmds_lv, &talloc );
+    org_lv = sl->lv;
+    sl->lv = &cmds_lv;
     select_lines_view( sl );
     lines_view_rem( &cmds_lv );
     plam_put( &balloc, balloc_cont_size );
     sl->lv = org_lv;
+    normalize_lines_view( sl );
 }
 
 
@@ -1305,17 +1377,24 @@ void select_lines_view_commands( select_lines_t sl )
  *
  * @return True if the selection should be used for execution.
  */
-pl_bool_t interaction( select_lines_t sl )
+static pl_bool_t interaction( select_lines_t sl )
 {
     int           key;
-    pl_bool_t     execute = pl_false;
-    pl_bool_t     done = pl_false;
+    pl_bool_t     execute;
+    pl_bool_t     done;
     select_line_t line;
     pl_pos_t      cur;
     pl_pos_t      max;
+    tm_prompt_t   res;
+    const char*   input;
+
+    execute = pl_false;
+    done = pl_false;
 
     /* Get user input. */
     for ( ;; ) {
+
+        select_lines_display( sl );
 
         key = termal_get_key( &tm );
 
@@ -1355,21 +1434,21 @@ pl_bool_t interaction( select_lines_t sl )
 
             case 'n':
                 cur = screen_line( sl );
-                max = screen_bottom_line() - 1;
+                max = screen_last_view_line( sl );
                 if ( cur != max ) {
                     select_lines_move_down_n( sl, max - cur );
                 } else {
-                    select_lines_move_down_n( sl, max );
+                    select_lines_move_down_n( sl, max + 1 );
                 }
                 break;
 
             case 'p':
                 cur = screen_line( sl );
-                max = screen_bottom_line() - 1;
-                if ( cur != max ) {
+                max = screen_last_view_line( sl );
+                if ( cur != 0 ) {
                     select_lines_move_up_n( sl, cur );
                 } else {
-                    select_lines_move_up_n( sl, max );
+                    select_lines_move_up_n( sl, max + 1 );
                 }
                 break;
 
@@ -1382,19 +1461,8 @@ pl_bool_t interaction( select_lines_t sl )
                 break;
 
             case 'g': {
-
-                tm_prompt_t res;
-                const char* input;
-
-                //                 res = termal_prompt( &tm,
-                //                                      plsr_from_string( "goto (+/- #): " ),
-                //                                      td_point_make( 0, screen_dims.y - 1 ),
-                //                                      screen_dims.x - 4,
-                //                                      &strbuf,
-                //                                      pl_true );
-                res = prompt_user( "goto (+/- #): ", &strbuf );
-
-                input = plss_string( &strbuf );
+                res = prompt_user( sl, "goto (+/- #): ", &user_buf );
+                input = plss_string( &user_buf );
 
                 if ( res == tm_prompt_ok ) {
 
@@ -1458,19 +1526,8 @@ pl_bool_t interaction( select_lines_t sl )
                 break;
 
             case 'c': {
-
-                tm_prompt_t res;
-                const char* input;
-
-                //                 res = termal_prompt( &tm,
-                //                                      plsr_from_string( "count (+/- #): " ),
-                //                                      td_point_make( 0, screen_dims.y - 1 ),
-                //                                      screen_dims.x - 4,
-                //                                      &strbuf,
-                //                                      pl_true );
-                res = prompt_user( "count (+/- #): ", &strbuf );
-
-                input = plss_string( &strbuf );
+                res = prompt_user( sl, "count (+/- #): ", &user_buf );
+                input = plss_string( &user_buf );
 
                 if ( res == tm_prompt_ok ) {
                     pl_pos_t cnt;
@@ -1503,17 +1560,8 @@ pl_bool_t interaction( select_lines_t sl )
 
             case 'm':
             case 'M': {
-                tm_prompt_t res;
-                const char* input;
-                //                 res = termal_prompt( &tm,
-                //                                      plsr_from_string( "pattern: " ),
-                //                                      td_point_make( 0, screen_dims.y - 1 ),
-                //                                      screen_dims.x - 4,
-                //                                      &strbuf,
-                //                                      pl_true );
-                res = prompt_user( "pattern: ", &strbuf );
-
-                input = plss_string( &strbuf );
+                res = prompt_user( sl, "pattern: ", &user_buf );
+                input = plss_string( &user_buf );
                 if ( res == tm_prompt_ok ) {
                     select_lines_mark_matching( sl, input, ( key == 'm' ) );
                 }
@@ -1522,17 +1570,8 @@ pl_bool_t interaction( select_lines_t sl )
 
             case 'f':
             case 'F': {
-                tm_prompt_t res;
-                const char* input;
-                //                 res = termal_prompt( &tm,
-                //                                      plsr_from_string( "pattern: " ),
-                //                                      td_point_make( 0, screen_dims.y - 1 ),
-                //                                      screen_dims.x - 4,
-                //                                      &strbuf,
-                //                                      pl_true );
-                res = prompt_user( "pattern: ", &strbuf );
-
-                input = plss_string( &strbuf );
+                res = prompt_user( sl, "pattern: ", &user_buf );
+                input = plss_string( &user_buf );
                 if ( res == tm_prompt_ok ) {
                     select_lines_display( sl );
                     select_lines_find_interactive( sl, input, ( key == 'f' ) );
@@ -1554,9 +1593,9 @@ pl_bool_t interaction( select_lines_t sl )
                 select_line_t line;
 
                 line = lines_view_ref( sl->lv, sl->lv->curline );
-                plss_reformat_string( &strbuf, "file %s | grep -q \"ASCII text\"", line->text );
+                plss_reformat_string( &work_buf, "file %s | grep -q \"ASCII text\"", line->text );
 
-                if ( system( plss_string( &strbuf ) ) == 0 ) {
+                if ( system( plss_string( &work_buf ) ) == 0 ) {
                     show_file_content( sl, line->text );
                 }
             } break;
@@ -1572,8 +1611,6 @@ pl_bool_t interaction( select_lines_t sl )
         if ( done ) {
             break;
         }
-
-        select_lines_display( sl );
     }
 
     return execute;
@@ -1589,9 +1626,9 @@ static pl_none termal_resize_callback( termal_t termal, pl_t user_data )
 {
     select_lines_t sl;
 
-    screen_dims = termal_dimensions( termal );
-
     sl = user_data;
+    sl->screen_dims = termal_dimensions( termal );
+    normalize_lines_view( sl );
     select_lines_display( sl );
 }
 
@@ -1602,7 +1639,7 @@ static pl_none termal_resize_callback( termal_t termal, pl_t user_data )
  * @param sl Select_lines object.
  * @return True if the selection should be used for execution.
  */
-pl_bool_t setup_and_interact( select_lines_t sl )
+static pl_bool_t setup_and_interact( select_lines_t sl )
 {
     /* Prepare the terminal window content. */
 
@@ -1630,7 +1667,7 @@ pl_bool_t setup_and_interact( select_lines_t sl )
  *
  * @param sl Select_lines object.
  */
-void select_lines_presel_all( select_lines_t sl )
+static void select_lines_presel_all( select_lines_t sl )
 {
     select_line_t line;
     for ( pl_pos_t i = 0; i < lines_view_count( sl->lv ); i++ ) {
@@ -1646,7 +1683,7 @@ void select_lines_presel_all( select_lines_t sl )
  * @param sl Select_lines object.
  * @param list List of lines as strings.
  */
-void select_lines_presel_listed( select_lines_t sl, char** list )
+static void select_lines_presel_listed( select_lines_t sl, char** list )
 {
     pl_pos_t      idx;
     select_line_t line;
@@ -1676,11 +1713,11 @@ enum number_fsm_e
  * @param sl Select_lines object.
  * @param filename File containing lines to select.
  */
-void select_lines_presel_file( select_lines_t sl, const char* filename )
+static void select_lines_presel_file( select_lines_t sl, const char* filename )
 {
     FILE*             fh;
     int               ch;
-    enum number_fsm_e fsm = find_first;
+    enum number_fsm_e fsm;
 
     fh = fopen( filename, "r" );
     if ( !fh ) {
@@ -1692,8 +1729,9 @@ void select_lines_presel_file( select_lines_t sl, const char* filename )
      * can be any whitespace (SPACE or NEWLINE etc).
      */
 
-    plcm_reset( &strbuf );
+    plcm_reset( &work_buf );
 
+    fsm = find_first;
     ch = fgetc( fh );
 
     for ( ;; ) {
@@ -1723,11 +1761,11 @@ void select_lines_presel_file( select_lines_t sl, const char* filename )
                     pl_pos_t      idx;
 
                     if ( isdigit( ch ) ) {
-                        plss_append_char( &strbuf, (char)ch );
+                        plss_append_char( &work_buf, (char)ch );
                     } else {
                         /* Mark line with found number. */
-                        idx = strtol( plss_string( &strbuf ), NULL, 0 ) - 1;
-                        plcm_reset( &strbuf );
+                        idx = strtol( plss_string( &work_buf ), NULL, 0 ) - 1;
+                        plcm_reset( &work_buf );
                         if ( idx < lines_view_count( sl->lv ) ) {
                             line = lines_view_ref( sl->lv, idx );
                             line->marked = !line->marked;
@@ -1825,14 +1863,9 @@ int main( int argc, char** argv )
     }
 
 
-#ifdef ml_do_debug
-    ml_dbug_open( "debug.txt" );
-#endif
-
-    /* Setup the base allocator for 1MB node. */
+    /* Setup the base allocator for a 1MB node. */
     plam_new( &balloc, balloc_node_size );
 
-    plcm_new( &textlinebuf, 8192 );
 
     /* Lines container. */
     select_lines_s sl;
@@ -1841,8 +1874,9 @@ int main( int argc, char** argv )
     lines_view_new( &lv, &balloc, 8192 );
     select_lines_init( &sl, &lv, &balloc );
 
-    /* Initialize common string (line content) buffer. */
-    plcm_new( &strbuf, 2048 );
+    /* Initialize common string (line content) buffers. */
+    plcm_new( &line_buf, 8192 );
+    plcm_new( &work_buf, 2048 );
 
 
     if ( ( opt = como_given( "list" ) ) ) {
@@ -1882,7 +1916,7 @@ int main( int argc, char** argv )
     }
 
 
-    pl_bool_t execute = pl_false;
+    pl_bool_t execute;
 
 #ifdef TAKE_SKIP_INTERACTION
 
@@ -1890,7 +1924,6 @@ int main( int argc, char** argv )
     execute = pl_true;
 
 #else
-
 
     if ( !como_given( "batch" ) ) {
         execute = setup_and_interact( &sl );
@@ -1909,7 +1942,9 @@ int main( int argc, char** argv )
 
     /* Use the user selection for output. */
 
-    FILE* no_exec_fh = NULL;
+    FILE* no_exec_fh;
+
+    no_exec_fh = NULL;
     opt = como_opt( "no_exec" );
     if ( opt->given ) {
         if ( opt->valuecnt > 0 ) {
@@ -1952,7 +1987,6 @@ int main( int argc, char** argv )
     /* Execute selection using command(s). */
     lines_view_s cmds;
 
-    sl.lv = &cmds;
     select_lines_create_commands( &sl, &cmds, &balloc );
 
     for ( select_line_t line = plcm_data( &cmds.lines ); (pl_t)line < plcm_end( &cmds.lines );
