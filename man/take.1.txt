@@ -195,9 +195,13 @@ Function2: Select files to remove from current directory hierarchically.
   alias lcrrm='take -i \"find .\" -c "rm -rf \"@\""'
 ....
 
-Function3: General purpose file selector.
+Function3: General purpose file selector of current directory files
+for sub-commands.
 ....
-  alias fsel='take -l -c "echo @"'
+  alias fsel='take -j -l -c "echo @"'
+  ...
+  rm `fsel`
+  cat `fsel`
 ....
 
 

@@ -244,13 +244,16 @@ Function2: Select files to remove from current directory hierarchically\&.
 .RE
 .\}
 .sp
-Function3: General purpose file selector\&.
+Function3: General purpose file selector of current directory files for sub\-commands\&.
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
-  alias fsel=\*(Aqtake \-l \-c "echo @"\*(Aq
+  alias fsel=\*(Aqtake \-j \-l \-c "echo @"\*(Aq
+  \&.\&.\&.
+  rm `fsel`
+  cat `fsel`
 .fi
 .if n \{\
 .RE
