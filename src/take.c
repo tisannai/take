@@ -138,6 +138,7 @@ static char* help_list[] = {
     "  b: Move to beginning of list",
     "  e: Move to end of list",
     "  g: Goto to line",
+    "  G: Goto last line",
     "  s: Select current",
     "  r: Reject current",
     "  t: Toggle current",
@@ -1460,7 +1461,7 @@ static pl_bool_t interaction( select_lines_t sl )
                 select_lines_move_down_n( sl, lines_view_count( sl->lv ) - 1 - sl->lv->curline );
                 break;
 
-            case 'g': {
+            case 'g':
                 res = prompt_user( sl, "goto (+/- #): ", &user_buf );
                 input = plss_string( &user_buf );
 
@@ -1490,7 +1491,16 @@ static pl_bool_t interaction( select_lines_t sl )
                             break;
                     }
                 }
-            } break;
+                break;
+
+            case 'G':
+                sl->lv->curline = lines_view_count( sl->lv ) - 1;
+                if ( screen_status_line( sl ) > lines_view_count( sl->lv ) ) {
+                    sl->lv->firstline = 0;
+                } else {
+                    sl->lv->firstline = sl->lv->curline - screen_status_line( sl ) + 1;
+                }
+                break;
 
             case 's':
                 select_lines_set_mark( sl );
@@ -1525,7 +1535,7 @@ static pl_bool_t interaction( select_lines_t sl )
                 }
                 break;
 
-            case 'c': {
+            case 'c':
                 res = prompt_user( sl, "count (+/- #): ", &user_buf );
                 input = plss_string( &user_buf );
 
@@ -1556,7 +1566,7 @@ static pl_bool_t interaction( select_lines_t sl )
                         select_lines_move_down( sl );
                     }
                 }
-            } break;
+                break;
 
             case 'm':
             case 'M': {
@@ -1565,8 +1575,8 @@ static pl_bool_t interaction( select_lines_t sl )
                 if ( res == tm_prompt_ok ) {
                     select_lines_mark_matching( sl, input, ( key == 'm' ) );
                 }
-
-            } break;
+                break;
+            }
 
             case 'f':
             case 'F': {
@@ -1576,8 +1586,8 @@ static pl_bool_t interaction( select_lines_t sl )
                     select_lines_display( sl );
                     select_lines_find_interactive( sl, input, ( key == 'f' ) );
                 }
-
-            } break;
+                break;
+            }
 
             case 'l':
                 select_lines_center_view( sl );
@@ -1598,7 +1608,8 @@ static pl_bool_t interaction( select_lines_t sl )
                 if ( system( plss_string( &work_buf ) ) == 0 ) {
                     show_file_content( sl, line->text );
                 }
-            } break;
+                break;
+            }
 
             case 'h':
                 show_command_help( sl );

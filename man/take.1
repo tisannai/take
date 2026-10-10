@@ -2,12 +2,12 @@
 .\"     Title: take
 .\"    Author: [see the "AUTHOR" section]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 10/05/2026
+.\"      Date: 10/10/2026
 .\"    Manual: \ \&
 .\"    Source: \ \&
 .\"  Language: English
 .\"
-.TH "TAKE" "1" "10/05/2026" "\ \&" "\ \&"
+.TH "TAKE" "1" "10/10/2026" "\ \&" "\ \&"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -34,7 +34,7 @@ take \- List Selection Utility
 \fBtake\fR [\fIOPTIONS\fR]
 .SH "DESCRIPTION"
 .sp
-Purpose of take(1) is to provide a convenient way for selecting items interactively from a list within a text terminal\&. \fBtake\fR is the proper tool for filtering a selection when the list of items can\(cqt be matched with wildcards or regexps, i\&.e\&. they don\(cqt share substrings\&.
+Purpose of take(1) is to provide a convenient way for selecting items interactively from a list within a text terminal\&. \fBtake\fR is the proper tool for filtering a selection, when the list of items can\(cqt be matched with wildcards or regexps, i\&.e\&. they don\(cqt share substrings\&.
 .SH "INTRODUCTION"
 .sp
 \fBtake\fR is a tool used for selecting items from a list interactively and executing a command with the selection\&.
@@ -89,6 +89,7 @@ p: Move up page
 b: Move to beginning of list
 e: Move to end of list
 g: Goto to <line> (or relative with +/\- <line>)
+G: Goto last line
 s: Select current
 r: Reject current
 t: Toggle current

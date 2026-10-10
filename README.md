@@ -1,9 +1,9 @@
 # Take
 
 Purpose of **take** is to provide a convenient way for selecting items
-from a list within a text terminal interactively. **take** is the best
-tool for filtering a selection when the list of items can't be matched
-with wildcards or regexps, i.e. they don't share substrings.
+interactively from a list within a text terminal. **take** is the
+proper tool for filtering a selection, when the list of items can't be
+matched with wildcards or regexps, i.e. they don't share substrings.
 
 Selection list can be build in number of ways (also from STDIN). When
 selection is ready, **take** executes provided command using the
@@ -17,7 +17,8 @@ selection.
 
 # Building and installing
 
-**take** depends on libraries: `termbox2`, `como`, and `plinth`.
+**take** depends on libraries: `termal`, `toodee`, `termbox2`, `como`,
+and `plinth`.
 
 **take** is compiled with simple shell script:
 

@@ -18,8 +18,8 @@ DESCRIPTION
 
 Purpose of take(1) is to provide a convenient way for selecting items
 interactively from a list within a text terminal. *take* is the proper
-tool for filtering a selection when the list of items can't be matched
-with wildcards or regexps, i.e. they don't share substrings.
+tool for filtering a selection, when the list of items can't be
+matched with wildcards or regexps, i.e. they don't share substrings.
 
 
 INTRODUCTION
@@ -74,6 +74,7 @@ The selection is performed using the following one-key commands:
   b: Move to beginning of list
   e: Move to end of list
   g: Goto to <line> (or relative with +/- <line>)
+  G: Goto last line
   s: Select current
   r: Reject current
   t: Toggle current
